@@ -1,39 +1,40 @@
-#!/usr/bin/php
 <?php
-// Include required files for path, host info, and the RabbitMQ library.
-require_once('path.inc');
-require_once('get_host_info.inc');
-require_once('rabbitMQLib.inc');
+require_once __DIR__ . '/vendor/autoload.php';
 
-/**
- * Callback function to process incoming messages.
- *
- * @param array $request The message received from the queue.
- * @return array Response data to be sent back (if needed).
- */
-function requestProcessor($request) {
-    echo "Received request:\n";
-    print_r($request);
-    
-    // Process the message based on its type or content.
-    // For example, if it's a Login request, check credentials, etc.
-    // Here we simply acknowledge receipt and return a sample response.
-    $response = array(
-        "status" => "success",
-        "message" => "Request processed.",
-        "details" => $request
-    );
-    
-    return $response;
+use PhpAmqpLib\Connection\AMQPStreamConnection;
+
+// Connection settings
+$host     = '100.105.162.20';
+$port     = 5672;
+$user     = 'webdev';
+$password = 'password';
+$vhost    = '/';
+
+// Establish connection and channel
+$connection = new AMQPStreamConnection($host, $port, $user, $password, $vhost);
+$channel = $connection->channel();
+
+// Declare the queue (if it doesn’t already exist)
+$queue = 'hello';
+$channel->queue_declare($queue, false, true, false, false);
+
+echo "Fetching messages from queue '$queue':\n";
+
+// Loop to get all messages from the queue
+while (true) {
+    // basic_get returns a message or null if the queue is empty
+    $msg = $channel->basic_get($queue);
+    if ($msg) {
+        echo " [x] Received: " . $msg->body . "\n";
+        // Acknowledge the message so it is removed from the queue
+        $channel->basic_ack($msg->delivery_info['delivery_tag']);
+    } else {
+        echo "No more messages in the queue.\n";
+        break;
+    }
 }
 
-// Create a new RabbitMQ server instance using your configuration.
-$server = new rabbitMQServer("testRabbitMQ.ini", "testServer");
-
-echo " [*] Waiting for messages. To exit press CTRL+C\n";
-
-// Start processing requests. The function 'process_requests' will wait 
-// for messages on the queue and pass each message to 'requestProcessor' callback.
-$server->process_requests("requestProcessor");
-
+// Clean up: close channel and connection
+$channel->close();
+$connection->close();
 ?>
