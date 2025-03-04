@@ -1,46 +1,39 @@
+#!/usr/bin/php
 <?php
-require_once __DIR__ . '/vendor/autoload.php';
+// Include required files for path, host info, and the RabbitMQ library.
+require_once('path.inc');
+require_once('get_host_info.inc');
+require_once('rabbitMQLib.inc');
 
-use PhpAmqpLib\Connection\AMQPStreamConnection;
+/**
+ * Callback function to process incoming messages.
+ *
+ * @param array $request The message received from the queue.
+ * @return array Response data to be sent back (if needed).
+ */
+function requestProcessor($request) {
+    echo "Received request:\n";
+    print_r($request);
+    
+    // Process the message based on its type or content.
+    // For example, if it's a Login request, check credentials, etc.
+    // Here we simply acknowledge receipt and return a sample response.
+    $response = array(
+        "status" => "success",
+        "message" => "Request processed.",
+        "details" => $request
+    );
+    
+    return $response;
+}
 
-// RabbitMQ connection parameters
-$host     = '100.105.162.20'; // Replace with your RabbitMQ host if different
-$port     = 5672;
-$user     = 'webdev';
-$password = 'password';
-$vhost    = '/'; // Adjust if you're using a custom vhost
-
-// Establish connection and open a channel
-$connection = new AMQPStreamConnection($host, $port, $user, $password, $vhost);
-$channel = $connection->channel();
-
-// Declare the queue (ensure it matches the publisher's queue name)
-$queue = 'hello';
-$channel->queue_declare($queue, false, true, false, false);
+// Create a new RabbitMQ server instance using your configuration.
+$server = new rabbitMQServer("testRabbitMQ.ini", "testServer");
 
 echo " [*] Waiting for messages. To exit press CTRL+C\n";
 
-// Callback function to process incoming messages
-$callback = function($msg) {
-    echo " [x] Received: ", $msg->body, "\n";
-    
-    // Here you can add your logic to process the message
-    // For example, decode JSON, perform database operations, etc.
-    
-    // Acknowledge that the message has been processed
-    $msg->ack();
-};
+// Start processing requests. The function 'process_requests' will wait 
+// for messages on the queue and pass each message to 'requestProcessor' callback.
+$server->process_requests("requestProcessor");
 
-// Start consuming messages from the queue
-// false for manual acknowledgement
-$channel->basic_consume($queue, '', false, false, false, false, $callback);
-
-// Keep the script running and listening for messages
-while ($channel->is_consuming()) {
-    $channel->wait();
-}
-
-// Cleanup (these lines may not be reached unless the loop exits)
-$channel->close();
-$connection->close();
 ?>
