@@ -15,7 +15,7 @@ $connection = new AMQPStreamConnection($host, $port, $user, $password, $vhost);
 $channel = $connection->channel();
 
 // Declare the queue (if it doesn’t already exist)
-$queue = 'hello';
+$queue = 'register';
 $channel->queue_declare($queue, false, true, false, false);
 
 echo "Fetching messages from queue '$queue':\n";
