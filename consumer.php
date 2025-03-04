@@ -28,9 +28,6 @@ while (true) {
         echo " [x] Received: " . $msg->body . "\n";
         // Acknowledge the message so it is removed from the queue
         $channel->basic_ack($msg->delivery_info['delivery_tag']);
-    } else {
-        echo "No more messages in the queue.\n";
-        break;
     }
 }
 
