@@ -4,14 +4,7 @@ require_once('path.inc');
 require_once('get_host_info.inc');
 require_once('rabbitMQLib.inc'); // Includes the RabbitMQ Library
 require_once('mysqlconnect.php'); // Includes the database config
-require_once('populateDB.php');
-
-
-echo "running populateDB.php to initialize the database...\n";
-$populateDBOutput = shell_exec("php " . __DIR__ . "/populateDB.php 2>&1");
-
-echo "populateDB Output:\n" . $populateDBOutput . "\n";
-
+require_once('populateDB.php'); // Populates teh database with schema
 
 function doLogin($username,$password)
 {
@@ -50,7 +43,7 @@ function doRegister($first, $last, $username, $email, $password)
         return "Database error: " . $mydb->error;
     }
 
-    $stmt->bind_param("sssss", $first, $last, $username, $email, $hashedPassword);
+    $stmt->bind_param("sssss", $first, $last, $username, $email, $password);
     
     if ($stmt->execute()) {
         return "user registered successfully.";
@@ -82,6 +75,7 @@ function requestProcessor($request)
 $server = new rabbitMQServer("testRabbitMQ.ini","testServer");
 
 $server->process_requests('requestProcessor');
+echo "processing requests rn".PHP_EOL;
 exit();
 ?>
 
