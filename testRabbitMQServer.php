@@ -3,7 +3,7 @@
 require_once('path.inc');
 require_once('get_host_info.inc');
 require_once('rabbitMQLib.inc'); // Includes the RabbitMQ Library
-require_once('db_config.php'); // Includes the database config
+require_once('mysqlconnect.php'); // Includes the database config
 
 echo "🔄 Initializing database using schema.sql...\n";
 
