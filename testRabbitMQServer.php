@@ -9,11 +9,14 @@ require_once('populateDB.php'); // Populates teh database with schema
 function doLogin($username, $password)
 {
     global $mydb;
+    echo "🔍 Debug: doLogin() function started.\n";
 
     // Check if the user exists
     $query = "SELECT id, password_hash FROM users WHERE username = ?";
     $stmt = $mydb->prepare($query);
+    
     if (!$stmt) {
+        echo "debug: Database error - " . $mydb->error . "\n";
         return ["status" => "error", "message" => "Database error: " . $mydb->error];
     }
 
@@ -21,45 +24,29 @@ function doLogin($username, $password)
     $stmt->execute();
     $stmt->store_result();
 
+    echo "🔍 Debug: Query executed. Found rows: " . $stmt->num_rows . "\n";
+
     if ($stmt->num_rows == 0) {
-        return ["status" => "error", "message" => "invalid username or password."];
+        echo "debug: No user found.\n";
+        return ["status" => "error", "message" => "Invalid username or password."];
     }
 
+    // User exists, fetch hashed password
     $stmt->bind_result($userId, $hashedPassword);
     $stmt->fetch();
 
+    echo "🔍 Debug: User found. Checking password...\n";
+
     // Verify password
-    if (!password_verify($password, $hashedPassword)) {
-        return ["status" => "error", "message" => "incorrect password."];
+    if (password_verify($password, $hashedPassword)) {
+        echo "debug: Password verified!\n";
+        return ["status" => "success", "message" => "login successful.", "user_id" => $userId];
+    } else {
+        echo "debug: Password incorrect.\n";
+        return ["status" => "error", "message" => "Invalid username or password."];
     }
-
-    $stmt->close();
-
-    // Generate a new session token
-    $sessionToken = bin2hex(random_bytes(32));
-    $expiresAt = date("Y-m-d H:i:s", strtotime("+1 hour")); // Session expires in 1 hour
-
-    // Store session in the database
-    $sessionQuery = "INSERT INTO sessions (user_id, session_token, expires_at) VALUES (?, ?, ?)";
-    $stmt = $mydb->prepare($sessionQuery);
-    if (!$stmt) {
-        return ["status" => "error", "message" => "Database error: " . $mydb->error];
-    }
-
-    $stmt->bind_param("iss", $userId, $sessionToken, $expiresAt);
-    
-    if (!$stmt->execute()) {
-        return ["status" => "error", "message" => "failed to save session: " . $stmt->error];
-    }
-
-    // Return success message and session token
-    return [
-        "status" => "success",
-        "message" => "login successful.",
-        "session_token" => $sessionToken,
-        "user_id" => $userId
-    ];
 }
+
 
 function doValidate($sessionToken)
 {
