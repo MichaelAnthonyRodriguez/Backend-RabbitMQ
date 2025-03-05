@@ -27,5 +27,5 @@ if ($mydb->multi_query($schemaSQL)) {
     die("error initializing database: " . $mydb->error . "\n");
 }
 // Close connection
-$mydb->close();
+// $mydb->close();
 ?>
