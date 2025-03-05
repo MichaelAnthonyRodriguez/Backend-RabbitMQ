@@ -141,7 +141,7 @@ function requestProcessor($request)
   switch ($request['type'])
   {
     case "login":
-      return doLogin($request['username'],$request['password']);
+      return doLogin($request['user'],$request['password']);
     case "validate_session":
       return doValidate($request['sessionId']);
     case "register":
