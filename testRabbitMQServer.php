@@ -3,15 +3,14 @@
 require_once('path.inc');
 require_once('get_host_info.inc');
 require_once('rabbitMQLib.inc'); // Includes the RabbitMQ Library
-// require_once('mysqlconnect.php'); // Includes the database config
-// require_once('populateDB.php');
+require_once('mysqlconnect.php'); // Includes the database config
+require_once('populateDB.php');
 
 
+echo "running populateDB.php to initialize the database...\n";
+$populateDBOutput = shell_exec("php " . __DIR__ . "/populateDB.php 2>&1");
 
-// echo "running populateDB.php to initialize the database...\n";
-// $populateDBOutput = shell_exec("php " . __DIR__ . "/populateDB.php 2>&1");
-
-// echo "populateDB Output:\n" . $populateDBOutput . "\n";
+echo "populateDB Output:\n" . $populateDBOutput . "\n";
 
 
 function doLogin($username,$password)
@@ -41,10 +40,23 @@ function doValidate($sessionId)
 
 function doRegister($first, $last, $username, $email, $password)
 {
-    // lookup username in databas
-    // check password
-    return true;
-    //return false if not valid
+    global $mydb; // Ensure database connection is available
+
+    // Insert user into the database
+    $query = "INSERT INTO users (first_name, last_name, username, email, password_hash) VALUES (?, ?, ?, ?, ?)";
+    
+    $stmt = $mydb->prepare($query);
+    if (!$stmt) {
+        return "Database error: " . $mydb->error;
+    }
+
+    $stmt->bind_param("sssss", $first, $last, $username, $email, $hashedPassword);
+    
+    if ($stmt->execute()) {
+        return "user registered successfully.";
+    } else {
+        return "error registering user: " . $stmt->error;
+    }
 }
 
 function requestProcessor($request)
@@ -62,7 +74,7 @@ function requestProcessor($request)
     case "validate_session":
       return doValidate($request['sessionId']);
     case "register":
-      return doRegister($request['first'],$request['last'],$request['user'],$request['email'],$request['password'],);
+      return doRegister($request['first'],$request['last'],$request['user'],$request['email'],$request['password']);
   }
   return array("returnCode" => '0', 'message'=>"Server received request and processed");
 }
