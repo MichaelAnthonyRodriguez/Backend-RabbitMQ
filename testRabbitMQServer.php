@@ -9,15 +9,6 @@ require_once('populateDB.php'); // Populates teh database with schema
 function doLogin($username,$password)
 {
     // lookup username in database
-    $query = "select * from students;";
-
-    $response = $mydb->query($query);
-    if ($mydb->errno != 0)
-    {
-      echo "failed to execute query:".PHP_EOL;
-      echo __FILE__.':'.__LINE__.":error: ".$mydb->error.PHP_EOL;
-      exit(0);
-    }
     // check password
     return true;
     //return false if not valid
