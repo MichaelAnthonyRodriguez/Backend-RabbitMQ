@@ -6,20 +6,7 @@ require_once('rabbitMQLib.inc'); // Includes the RabbitMQ Library
 // require_once('mysqlconnect.php'); // Includes the database config
 // require_once('populateDB.php');
 
-define('DB_HOST', '127.0.0.1');
-define('DB_USER', 'testUser');
-define('DB_PASS', '12345');
-define('DB_NAME', 'testdb');
 
-// Create a MySQLi connection
-$mydb = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
-
-// Check for connection errors
-if ($mydb->errno) {
-    die("failed to connect to database: " . $mydb->error . PHP_EOL);
-}
-
-echo "successfully connected to database".PHP_EOL;
 
 // echo "running populateDB.php to initialize the database...\n";
 // $populateDBOutput = shell_exec("php " . __DIR__ . "/populateDB.php 2>&1");
