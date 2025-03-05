@@ -9,14 +9,14 @@ require_once('populateDB.php'); // Populates teh database with schema
 function doLogin($username, $password)
 {
     global $mydb;
-    echo "🔍 Debug: doLogin() function started.\n";
+    // echo "debug: doLogin() function started.\n";
 
     // Check if the user exists
-    $query = "SELECT id, password_hash FROM users WHERE username = ?";
+    $query = "SELECT id, first_name, last_name, password_hash FROM users WHERE username = ?";
     $stmt = $mydb->prepare($query);
     
     if (!$stmt) {
-        echo "debug: Database error - " . $mydb->error . "\n";
+        // echo "debug: Database error - " . $mydb->error . "\n";
         return ["status" => "error", "message" => "Database error: " . $mydb->error];
     }
 
@@ -24,25 +24,31 @@ function doLogin($username, $password)
     $stmt->execute();
     $stmt->store_result();
 
-    echo "🔍 Debug: Query executed. Found rows: " . $stmt->num_rows . "\n";
+    // echo "debug: Query executed. Found rows: " . $stmt->num_rows . "\n";
 
     if ($stmt->num_rows == 0) {
-        echo "debug: No user found.\n";
+        // echo "debug: No user found.\n";
         return ["status" => "error", "message" => "Invalid username or password."];
     }
 
     // User exists, fetch hashed password
-    $stmt->bind_result($userId, $hashedPassword);
+    $stmt->bind_result($userId, $firstName, $lastName, $hashedPassword);
     $stmt->fetch();
 
     echo "🔍 Debug: User found. Checking password...\n";
 
     // Verify password
     if (password_verify($password, $hashedPassword)) {
-        echo "debug: Password verified!\n";
-        return ["status" => "success", "message" => "login successful.", "user_id" => $userId];
+        // echo "debug: Password verified!\n";
+        return [
+          "status" => "success",
+          "message" => "✅ Login successful.",
+          "user_id" => $userId,
+          "first_name" => $firstName,
+          "last_name" => $lastName
+        ];
     } else {
-        echo "debug: Password incorrect.\n";
+        // echo "debug: Password incorrect.\n";
         return ["status" => "error", "message" => "Invalid username or password."];
     }
 }
