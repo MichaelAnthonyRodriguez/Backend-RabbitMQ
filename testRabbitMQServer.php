@@ -45,6 +45,7 @@ function doRegister($first, $last, $username, $email, $password)
 
 function requestProcessor($request)
 {
+  echo "processing requests rn".PHP_EOL;
   echo "received request".PHP_EOL;
   var_dump($request);
   if(!isset($request['type']))
@@ -67,7 +68,5 @@ $server = new rabbitMQServer("testRabbitMQ.ini","testServer");
 
 echo "testRabbitMQServer BEGIN".PHP_EOL;
 $server->process_requests('requestProcessor');
-echo "processing requests rn".PHP_EOL;
-exit();
 ?>
 
