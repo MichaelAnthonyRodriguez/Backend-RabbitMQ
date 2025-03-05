@@ -1,7 +1,7 @@
 <?php
 require_once('mysqlconnect.php'); // Includes the database config
 
-echo "🔄 Initializing database using schema.sql...\n";
+echo "initializing database using schema.sql...\n";
 
 // Path to SQL schema file
 $schemaFile = __DIR__ . "/schema.sql";

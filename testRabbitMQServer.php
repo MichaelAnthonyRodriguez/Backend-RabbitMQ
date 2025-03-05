@@ -6,10 +6,10 @@ require_once('rabbitMQLib.inc'); // Includes the RabbitMQ Library
 require_once('mysqlconnect.php'); // Includes the database config
 require_once('populateDB.php');
 
-echo "running populateDB.php to initialize the database...\n";
-$populateDBOutput = shell_exec("php " . __DIR__ . "/populateDB.php 2>&1");
+// echo "running populateDB.php to initialize the database...\n";
+// $populateDBOutput = shell_exec("php " . __DIR__ . "/populateDB.php 2>&1");
 
-echo "populateDB Output:\n" . $populateDBOutput . "\n";
+// echo "populateDB Output:\n" . $populateDBOutput . "\n";
 
 
 function doLogin($username,$password)
@@ -68,5 +68,6 @@ function requestProcessor($request)
 $server = new rabbitMQServer("testRabbitMQ.ini","testServer");
 
 $server->process_requests('requestProcessor');
+exit();
 ?>
 
