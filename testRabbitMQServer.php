@@ -6,21 +6,83 @@ require_once('rabbitMQLib.inc'); // Includes the RabbitMQ Library
 require_once('mysqlconnect.php'); // Includes the database config
 require_once('populateDB.php'); // Populates teh database with schema
 
-function doLogin($username,$password)
+function doLogin($username, $password)
 {
-    // lookup username in database
-    // check password
-    return true;
-    //return false if not valid
+    global $mydb;
+
+    // Check if the user exists
+    $query = "SELECT id, password_hash FROM users WHERE username = ?";
+    $stmt = $mydb->prepare($query);
+    if (!$stmt) {
+        return ["status" => "error", "message" => "Database error: " . $mydb->error];
+    }
+
+    $stmt->bind_param("s", $username);
+    $stmt->execute();
+    $stmt->store_result();
+
+    if ($stmt->num_rows == 0) {
+        return ["status" => "error", "message" => "invalid username or password."];
+    }
+
+    $stmt->bind_result($userId, $hashedPassword);
+    $stmt->fetch();
+
+    // Verify password
+    if (!password_verify($password, $hashedPassword)) {
+        return ["status" => "error", "message" => "incorrect password."];
+    }
+
+    $stmt->close();
+
+    // Generate a new session token
+    $sessionToken = bin2hex(random_bytes(32));
+    $expiresAt = date("Y-m-d H:i:s", strtotime("+1 hour")); // Session expires in 1 hour
+
+    // Store session in the database
+    $sessionQuery = "INSERT INTO sessions (user_id, session_token, expires_at) VALUES (?, ?, ?)";
+    $stmt = $mydb->prepare($sessionQuery);
+    if (!$stmt) {
+        return ["status" => "error", "message" => "Database error: " . $mydb->error];
+    }
+
+    $stmt->bind_param("iss", $userId, $sessionToken, $expiresAt);
+    
+    if (!$stmt->execute()) {
+        return ["status" => "error", "message" => "failed to save session: " . $stmt->error];
+    }
+
+    // Return success message and session token
+    return [
+        "status" => "success",
+        "message" => "login successful.",
+        "session_token" => $sessionToken,
+        "user_id" => $userId
+    ];
 }
 
-function doValidate($sessionId)
+function doValidate($sessionToken)
 {
-    // lookup username in databas
-    // check password
-    return true;
-    //return false if not valid
+    global $mydb;
+
+    // Check if the session exists and is still valid
+    $query = "SELECT user_id FROM sessions WHERE session_token = ? AND expires_at > NOW()";
+    $stmt = $mydb->prepare($query);
+    if (!$stmt) {
+        return ["status" => "error", "message" => "Database error: " . $mydb->error];
+    }
+
+    $stmt->bind_param("s", $sessionToken);
+    $stmt->execute();
+    $stmt->store_result();
+
+    if ($stmt->num_rows == 0) {
+        return ["status" => "error", "message" => "session expired or invalid."];
+    }
+
+    return ["status" => "success", "message" => "session is valid."];
 }
+
 
 function doRegister($first, $last, $username, $email, $password)
 {
@@ -59,6 +121,27 @@ function doRegister($first, $last, $username, $email, $password)
     }
 }
 
+function doLogout($sessionToken)
+{
+    global $mydb;
+
+    // Remove session from the database
+    $query = "DELETE FROM sessions WHERE session_token = ?";
+    $stmt = $mydb->prepare($query);
+    if (!$stmt) {
+        return ["status" => "error", "message" => "Database error: " . $mydb->error];
+    }
+
+    $stmt->bind_param("s", $sessionToken);
+    
+    if ($stmt->execute()) {
+        return ["status" => "success", "message" => "session logged out successfully."];
+    } else {
+        return ["status" => "error", "message" => "error logging out: " . $stmt->error];
+    }
+}
+
+
 function requestProcessor($request)
 {
   echo "processing requests rn".PHP_EOL;
@@ -76,6 +159,8 @@ function requestProcessor($request)
       return doValidate($request['sessionId']);
     case "register":
       return doRegister($request['first'],$request['last'],$request['user'],$request['email'],$request['password']);
+    case "logout":
+      return doLogout($request['session_token']);
   }
   return array("returnCode" => '0', 'message'=>"Server received request and processed");
 }
