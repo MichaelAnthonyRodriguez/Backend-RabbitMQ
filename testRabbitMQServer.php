@@ -118,21 +118,37 @@ function doLogout($sessionToken)
 {
     global $mydb;
 
-    // Remove session from the database
-    $query = "DELETE FROM sessions WHERE session_token = ?";
-    $stmt = $mydb->prepare($query);
+    // Check if the session exists before attempting to delete
+    $checkQuery = "SELECT id FROM sessions WHERE session_token = ?";
+    $stmt = $mydb->prepare($checkQuery);
     if (!$stmt) {
         return ["status" => "error", "message" => "Database error: " . $mydb->error];
     }
 
     $stmt->bind_param("s", $sessionToken);
-    
+    $stmt->execute();
+    $stmt->store_result();
+
+    if ($stmt->num_rows == 0) {
+        return ["status" => "error", "message" => "session does not exist or already logged out."];
+    }
+
+    // Proceed to delete session
+    $deleteQuery = "DELETE FROM sessions WHERE session_token = ?";
+    $stmt = $mydb->prepare($deleteQuery);
+    if (!$stmt) {
+        return ["status" => "error", "message" => "Database error: " . $mydb->error];
+    }
+
+    $stmt->bind_param("s", $sessionToken);
+
     if ($stmt->execute()) {
         return ["status" => "success", "message" => "session logged out successfully."];
     } else {
         return ["status" => "error", "message" => "error logging out: " . $stmt->error];
     }
 }
+
 
 
 function requestProcessor($request)
