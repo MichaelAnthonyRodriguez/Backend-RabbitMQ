@@ -4,7 +4,7 @@ require_once('path.inc');
 require_once('get_host_info.inc');
 require_once('rabbitMQLib.inc'); // Includes the RabbitMQ Library
 require_once('mysqlconnect.php'); // Includes the database config
-require_once('populateDB.php');
+// require_once('populateDB.php');
 
 // echo "running populateDB.php to initialize the database...\n";
 // $populateDBOutput = shell_exec("php " . __DIR__ . "/populateDB.php 2>&1");
