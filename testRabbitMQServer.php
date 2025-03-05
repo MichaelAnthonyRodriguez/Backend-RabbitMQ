@@ -4,34 +4,12 @@ require_once('path.inc');
 require_once('get_host_info.inc');
 require_once('rabbitMQLib.inc'); // Includes the RabbitMQ Library
 require_once('mysqlconnect.php'); // Includes the database config
+require_once('populateDB.php');
 
-echo "🔄 Initializing database using schema.sql...\n";
+echo "running populateDB.php to initialize the database...\n";
+$populateDBOutput = shell_exec("php " . __DIR__ . "/populateDB.php 2>&1");
 
-// Path to SQL schema file
-$schemaFile = __DIR__ . "/schema.sql";
-
-// Check if file exists
-if (!file_exists($schemaFile)) {
-    die("❌ Error: Schema file not found.\n");
-}
-
-// Read schema file
-$schemaSQL = file_get_contents($schemaFile);
-
-// Execute schema queries
-if ($mydb->multi_query($schemaSQL)) {
-    do {
-        if ($result = $mydb->store_result()) {
-            $result->free();
-        }
-    } while ($mydb->more_results() && $mydb->next_result());
-    
-    echo "✅ Database initialized successfully from schema.sql.\n";
-} else {
-    die("❌ Error initializing database: " . $mydb->error . "\n");
-}
-// Close connection
-$mydb->close();
+echo "populateDB Output:\n" . $populateDBOutput . "\n";
 
 
 function doLogin($username,$password)
