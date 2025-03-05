@@ -25,6 +25,22 @@ function doValidate($sessionId)
 function doRegister($first, $last, $username, $email, $password)
 {
     global $mydb; // Ensure database connection is available
+    
+    // Checks database for duplicate credentials
+    $checkQuery = "SELECT id FROM users WHERE username = ? OR email = ?";
+    $stmt = $mydb->prepare($checkQuery);
+    if (!$stmt) {
+        return ["status" => "error", "message" => "Database error: " . $mydb->error];
+    }
+    $stmt->bind_param("ss", $username, $email);
+    $stmt->execute();
+    $stmt->store_result();
+    
+    if ($stmt->num_rows > 0) {
+        return ["status" => "error", "message" => "username or email already exists!"];
+    }
+    
+    $stmt->close();
 
     // Insert user into the database
     $query = "INSERT INTO users (first_name, last_name, username, email, password_hash) VALUES (?, ?, ?, ?, ?)";
