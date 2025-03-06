@@ -5,7 +5,7 @@ require_once('get_host_info.inc');
 require_once('rabbitMQLib.inc'); // Includes the RabbitMQ Library
 require_once('mysqlconnect.php'); // Includes the database config
 require_once('populateDB.php'); // Populates teh database with schema
-
+// Login function
 function doLogin($username, $password)
 {
     global $mydb;
@@ -35,14 +35,14 @@ function doLogin($username, $password)
     $stmt->bind_result($userId, $firstName, $lastName, $hashedPassword);
     $stmt->fetch();
 
-    echo "🔍 Debug: User found. Checking password...\n";
+    echo "User found. Checking password...\n";
 
     // Verify password
     if (password_verify($password, $hashedPassword)) {
         // echo "debug: Password verified!\n";
         return [
           "status" => "success",
-          "message" => "✅ Login successful.",
+          "message" => "login successful.",
           "user_id" => $userId,
           "first_name" => $firstName,
           "last_name" => $lastName
@@ -53,7 +53,7 @@ function doLogin($username, $password)
     }
 }
 
-
+// Session validation function
 function doValidate($sessionToken)
 {
     global $mydb;
@@ -76,10 +76,10 @@ function doValidate($sessionToken)
     return ["status" => "success", "message" => "session is valid."];
 }
 
-
+// Registration function
 function doRegister($first, $last, $username, $email, $password)
 {
-    global $mydb; // Ensure database connection is available
+    global $mydb;
     
     // Checks database for duplicate credentials
     $checkQuery = "SELECT id FROM users WHERE username = ? OR email = ?";
@@ -114,6 +114,7 @@ function doRegister($first, $last, $username, $email, $password)
     }
 }
 
+// Logout fucntion
 function doLogout($sessionToken)
 {
     global $mydb;
@@ -133,7 +134,7 @@ function doLogout($sessionToken)
         return ["status" => "error", "message" => "session does not exist or already logged out."];
     }
 
-    // Proceed to delete session
+    // delete session
     $deleteQuery = "DELETE FROM sessions WHERE session_token = ?";
     $stmt = $mydb->prepare($deleteQuery);
     if (!$stmt) {
@@ -149,8 +150,7 @@ function doLogout($sessionToken)
     }
 }
 
-
-
+// Processes rabbitmq requests
 function requestProcessor($request)
 {
   echo "processing requests rn".PHP_EOL;
