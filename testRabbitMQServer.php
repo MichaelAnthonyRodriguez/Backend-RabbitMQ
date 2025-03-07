@@ -37,20 +37,35 @@ function doLogin($username, $password)
 
     echo "User found. Checking password...\n";
 
-    // Verify password
-    if (password_verify($password, $hashedPassword)) {
-        // echo "debug: Password verified!\n";
-        return [
-          "status" => "success",
-          "message" => "login successful.",
-          "user_id" => $userId,
-          "first_name" => $firstName,
-          "last_name" => $lastName
-        ];
-    } else {
-        // echo "debug: Password incorrect.\n";
+    if (!password_verify($password, $hashedPassword)) {
         return ["status" => "error", "message" => "Invalid username or password."];
     }
+
+    // Generate session token
+    $sessionToken = bin2hex(random_bytes(32));
+    $expiresAt = date("Y-m-d H:i:s", strtotime("+1 hour"));
+
+    // Insert session into the database
+    $insertSessionQuery = "INSERT INTO sessions (user_id, session_token, expires_at) VALUES (?, ?, ?)";
+    $stmt = $mydb->prepare($insertSessionQuery);
+    if (!$stmt) {
+        return ["status" => "error", "message" => "Database error: " . $mydb->error];
+    }
+
+    $stmt->bind_param("iss", $userId, $sessionToken, $expiresAt);
+
+    if (!$stmt->execute()) {
+        return ["status" => "error", "message" => "Failed to create session."];
+    }
+
+    return [
+        "status" => "success",
+        "message" => "Login successful.",
+        "session_token" => $sessionToken,
+        "user_id" => $userId,
+        "first_name" => $firstName,
+        "last_name" => $lastName
+    ];
 }
 
 // Session validation function
