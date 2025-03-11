@@ -22,3 +22,13 @@ CREATE TABLE IF NOT EXISTS sessions (
     expires_at TIMESTAMP NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+-- Create a table of movies
+CREATE TABLE IF NOT EXISTS movies (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL UNIQUE,
+    genre VARCHAR(255) NOT NULL,
+    director VARCHAR(255) NOT NULL,
+    user_rating FLOAT(24) Check (user_rating BETWEEN 0.0 and 10.0),
+    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+);
