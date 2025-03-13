@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS movies (
     title VARCHAR(255) NOT NULL UNIQUE,
     genre VARCHAR(255) NOT NULL,
     director VARCHAR(255) NOT NULL,
-    user_rating FLOAT(24) Check (user_rating BETWEEN 0.0 and 10.0),
+    user_rating FLOAT(24),
     added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CHECK (user_rating >= 0.0 AND user_rating <= 10.0)
 );
