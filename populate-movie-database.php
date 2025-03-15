@@ -1,19 +1,19 @@
 #!/usr/bin/php
 <?php
-// Include Composer's autoloader and your database connection file
+// Include Composer's autoloader and your MySQL connection file.
 require_once 'vendor/autoload.php';
-require_once 'mysqlconnect.php'; // This file sets up a MySQLi connection in $mydb
+require_once 'mysqlconnect.php'; // This file should create a MySQLi connection in $mydb
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ClientException;
 
-// Set up the Guzzle client
+// Create a new Guzzle client.
 $client = new Client();
 
-// Your TMDb Bearer token
+// Your TMDb Bearer token.
 $bearerToken = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJlNzgyMWU0YzQxNDFhNWZiY2FhYzA3NzdhYWJiODc2MCIsIm5iZiI6MTc0MTYxNjkwMi4wODMwMDAyLCJzdWIiOiI2N2NlZjcwNjNjMjU0NDQ4ODJlMzFkZTYiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.zHLr6Jcvpr8NdKd4xZvwcqpRhJpO-Y874oXFlP8gqPI';
 
-// Base URL and query parameters for the TMDb discover movie endpoint
+// Base URL and initial query parameters for the discover movie endpoint.
 $baseUrl = 'https://api.themoviedb.org/3/discover/movie';
 $queryParams = [
     'include_adult' => 'false',
@@ -23,7 +23,7 @@ $queryParams = [
     'page'          => 1,
 ];
 
-// --- Step 1: Get total pages from the first API call ---
+// --- STEP 1: Get the total number of pages ---
 try {
     $response = $client->request('GET', $baseUrl, [
         'headers' => [
@@ -40,10 +40,11 @@ try {
 if (!isset($body['total_pages'])) {
     die("Error: total_pages not found in response.\n");
 }
+
 $totalPages = $body['total_pages'];
 echo "Total pages to process: $totalPages\n";
 
-// --- Step 2: Create the movies table if it doesn't exist ---
+// --- STEP 2: Create the movies table if it doesn't exist ---
 $createTableSql = "
 CREATE TABLE IF NOT EXISTS movies (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -69,11 +70,12 @@ if (!$mydb->query($createTableSql)) {
 }
 echo "Movies table created or already exists.\n";
 
-// --- Step 3: Prepare the insertion statement ---
-// Note: The bind_param() format string "iissssdsissdi" represents:
-// tmdb_id (i), adult (i), backdrop_path (s), original_language (s),
-// original_title (s), overview (s), popularity (d), poster_path (s),
-// release_date (s), title (s), video (i), vote_average (d), vote_count (i)
+// --- STEP 3: Prepare the insertion query ---
+// Bind parameters format: "iissssdsissdi"
+//  tmdb_id (i), adult (i), backdrop_path (s),
+//  original_language (s), original_title (s), overview (s),
+//  popularity (d), poster_path (s), release_date (s),
+//  title (s), video (i), vote_average (d), vote_count (i)
 $insertSql = "
 INSERT INTO movies 
     (tmdb_id, adult, backdrop_path, original_language, original_title, overview, popularity, poster_path, release_date, title, video, vote_average, vote_count)
@@ -97,15 +99,15 @@ if (!$stmt) {
     die("Failed to prepare statement: " . $mydb->error . "\n");
 }
 
-// --- Step 4: Loop through pages, fetch movies, and insert into the database ---
-$maxRetries = 3; // maximum retry attempts if rate limited
+// --- STEP 4: Loop through each page, fetch movies, and insert into the database ---
+$maxRetries = 3; // Maximum number of retry attempts if rate limited
 for ($page = 1; $page <= $totalPages; $page++) {
     echo "Processing page $page...\n";
     $queryParams['page'] = $page;
     $attempt = 0;
     $success = false;
     
-    // Retry loop for handling rate limiting (HTTP 429)
+    // Retry loop to handle possible HTTP 429 responses.
     while (!$success && $attempt < $maxRetries) {
         try {
             $response = $client->request('GET', $baseUrl, [
@@ -117,9 +119,9 @@ for ($page = 1; $page <= $totalPages; $page++) {
             ]);
             $success = true;
         } catch (ClientException $e) {
-            if ($e->getResponse()->getStatusCode() == 429) {
-                echo "Rate limit hit on page $page, attempt " . ($attempt + 1) . ". Waiting...\n";
-                sleep(2); // Wait 2 seconds before retrying
+            if ($e->getResponse() && $e->getResponse()->getStatusCode() == 429) {
+                echo "Rate limit hit on page $page, attempt " . ($attempt + 1) . ". Waiting 2 seconds...\n";
+                sleep(2);
                 $attempt++;
             } else {
                 echo "Error fetching page $page: " . $e->getMessage() . "\n";
@@ -143,7 +145,8 @@ for ($page = 1; $page <= $totalPages; $page++) {
     }
     
     foreach ($data['results'] as $movie) {
-        // Extract fields with null coalescing operators for optional values
+        // Map the API response fields to your table columns.
+        // Note: The sample JSON includes "genre_ids" but it is not stored in the table.
         $tmdb_id           = $movie['id'];
         $adult             = !empty($movie['adult']) ? 1 : 0;
         $backdrop_path     = $movie['backdrop_path'] ?? null;
@@ -158,7 +161,7 @@ for ($page = 1; $page <= $totalPages; $page++) {
         $vote_average      = isset($movie['vote_average']) ? $movie['vote_average'] : 0;
         $vote_count        = isset($movie['vote_count']) ? $movie['vote_count'] : 0;
         
-        // Bind parameters (the order must match the SQL statement)
+        // Bind parameters (the order must match the prepared statement)
         if (!$stmt->bind_param(
             "iissssdsissdi",
             $tmdb_id,
@@ -184,7 +187,7 @@ for ($page = 1; $page <= $totalPages; $page++) {
         }
     }
     
-    // Pause between page requests to help prevent rate limiting
+    // Delay between page requests to help avoid rate limiting.
     usleep(300000); // 0.3 seconds
 }
 
