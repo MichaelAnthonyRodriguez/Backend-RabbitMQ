@@ -44,7 +44,7 @@ if (!isset($body['total_pages'])) {
 $totalPages = $body['total_pages'];
 echo "Total pages to process: $totalPages\n";
 
-// --- STEP 2: Create the movies table if it doesn't exist ---
+// --- STEP 2: Create the movies table with `release_date` as VARCHAR ---
 $createTableSql = "
 CREATE TABLE IF NOT EXISTS movies (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS movies (
     overview TEXT,
     popularity DECIMAL(7,2),
     poster_path VARCHAR(255),
-    release_date DATE,
+    release_date VARCHAR(255),     -- Store date as string
     title VARCHAR(255),
     video BOOLEAN,
     vote_average DECIMAL(3,1),
@@ -160,19 +160,8 @@ for ($page = 1; $page <= $totalPages; $page++) {
         $vote_average      = isset($movie['vote_average']) ? $movie['vote_average'] : 0;
         $vote_count        = isset($movie['vote_count']) ? $movie['vote_count'] : 0;
 
-        // --- Date Validation & Conversion ---
-        // If release_date is provided, ensure it's formatted as YYYY-MM-DD
-        if (!empty($movie['release_date'])) {
-            $timestamp = strtotime($movie['release_date']);
-            if ($timestamp) {
-                $release_date = date('Y-m-d', $timestamp);
-            } else {
-                // If the date is invalid, set it to null
-                $release_date = null;
-            }
-        } else {
-            $release_date = null;
-        }
+        // Store release_date as a raw string (e.g., "2025-03-14") or null if missing
+        $release_date      = !empty($movie['release_date']) ? $movie['release_date'] : null;
 
         // Bind parameters in the correct order
         if (!$stmt->bind_param(
