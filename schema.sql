@@ -58,14 +58,5 @@ CREATE TABLE IF NOT EXISTS movies (
     vote_average DECIMAL(3,1),
     vote_count INT,
     
-    -- Additional details available from the movie details endpoint:
-    budget BIGINT,
-    homepage VARCHAR(255),
-    imdb_id VARCHAR(20),
-    revenue BIGINT,
-    runtime INT,
-    status VARCHAR(50),
-    tagline VARCHAR(255),
-    
     created_at BIGINT UNSIGNED NOT NULL DEFAULT (UNIX_TIMESTAMP())
 );
