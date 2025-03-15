@@ -165,6 +165,29 @@ function doLogout($sessionToken)
     }
 }
 
+//Movie seach function
+function doSearch($movie_title)
+{
+    global $mydb;
+    // Use a LIKE query to search for movies whose title contains the search string.
+    $query = "SELECT * FROM movies WHERE title LIKE CONCAT('%', ?, '%')";
+    $stmt = $mydb->prepare($query);
+    if(!$stmt){
+        return ["status" => "error", "message" => "Database error: " . $mydb->error];
+    }
+    $stmt->bind_param("s", $movie_title);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $movies = [];
+    while($row = $result->fetch_assoc()){
+        $movies[] = $row;
+    }
+    if(count($movies) == 0){
+        return ["status" => "error", "message" => "No movies found."];
+    }
+    return ["status" => "success", "movies" => $movies];
+}
+
 // Processes rabbitmq requests
 function requestProcessor($request)
 {
@@ -178,13 +201,15 @@ function requestProcessor($request)
   switch ($request['type'])
   {
     case "login":
-      return doLogin($request['user'],$request['password']);
+        return doLogin($request['user'],$request['password']);
     case "validate_session":
-      return doValidate($request['sessionId']);
+        return doValidate($request['sessionId']);
     case "register":
-      return doRegister($request['first'],$request['last'],$request['user'],$request['email'],$request['password']);
+        return doRegister($request['first'],$request['last'],$request['user'],$request['email'],$request['password']);
     case "logout":
-      return doLogout($request['session_token']);
+        return doLogout($request['session_token']);
+    case "search":
+        return doSearch($request['movie_title']);
   }
   return array("returnCode" => '0', 'message'=>"Server received request and processed");
 }
@@ -194,4 +219,3 @@ $server = new rabbitMQServer("testRabbitMQ.ini","testServer");
 echo "testRabbitMQServer BEGIN".PHP_EOL;
 $server->process_requests('requestProcessor');
 ?>
-
