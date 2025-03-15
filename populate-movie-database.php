@@ -16,18 +16,18 @@ $bearerToken = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJlNzgyMWU0YzQxNDFhNWZiY2FhYzA3Nzd
 // Base URL for the discover movie endpoint.
 $baseUrl = 'https://api.themoviedb.org/3/discover/movie';
 
-// Set base query parameters that remain constant.
+// Base query parameters that remain constant.
 $baseQueryParams = [
     'include_adult'          => 'false',
     'include_video'          => 'false',
     'language'               => 'en-US',
     'with_original_language' => 'en',                      // Only movies originally in English.
-    'sort_by'                => 'primary_release_date.desc', // Sort by primary release date descending.
-    // We'll add "primary_release_year" and "page" dynamically.
+    'sort_by'                => 'primary_release_date.desc', // Newest first.
+    // We'll add primary_release_year and optionally primary_release_date.lte dynamically.
 ];
 
-// --- STEP 1: Create the movies table ---
-// Here, release_date is stored as a string.
+// STEP 1: Create the movies table.
+// Note: release_date is stored as a string.
 $createTableSql = "
 CREATE TABLE IF NOT EXISTS movies (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS movies (
     overview TEXT,
     popularity DECIMAL(7,2),
     poster_path VARCHAR(255),
-    release_date VARCHAR(20),  -- storing as a string
+    release_date VARCHAR(20),
     title VARCHAR(255),
     video BOOLEAN,
     vote_average DECIMAL(3,1),
@@ -52,8 +52,8 @@ if (!$mydb->query($createTableSql)) {
 }
 echo "Movies table created or already exists.\n";
 
-// --- STEP 2: Prepare the insertion query ---
-// Parameter order: 
+// STEP 2: Prepare the insertion query.
+// The bind_param() format string corresponds to:
 // tmdb_id (i), adult (i), backdrop_path (s), original_language (s),
 // original_title (s), overview (s), popularity (d), poster_path (s),
 // release_date (s), title (s), video (i), vote_average (d), vote_count (i)
@@ -81,17 +81,25 @@ if (!$stmt) {
     die("Failed to prepare statement: " . $mydb->error . "\n");
 }
 
-// --- STEP 3: Loop over years descending starting from 2031 ---
-$year = 2031;
-while (true) {
-    echo "\nProcessing movies for year: $year\n";
-
-    // Set query parameters for the given year.
+/**
+ * processSegment
+ *
+ * For a given year and an optional filter date (to retrieve movies with primary_release_date <= $filterDate),
+ * this function processes up to 500 pages from TMDb and inserts each movie into the database.
+ * It returns an array: [ $processed, $lastMovieDate ]
+ * where $lastMovieDate is the release date of the last movie processed (the oldest in this segment),
+ * or null if no movies were found.
+ */
+function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $baseQueryParams, $stmt) {
+    // Build query parameters for this segment.
     $queryParams = $baseQueryParams;
     $queryParams['primary_release_year'] = $year;
+    if ($filterDate !== null) {
+        $queryParams['primary_release_date.lte'] = $filterDate;
+    }
     $queryParams['page'] = 1;
     
-    // Initial API call to determine total pages for this year.
+    // Make an initial API call to get the total pages.
     try {
         $response = $client->request('GET', $baseUrl, [
             'headers' => [
@@ -100,26 +108,23 @@ while (true) {
             ],
             'query' => $queryParams,
         ]);
-        $body = json_decode($response->getBody(), true);
     } catch (Exception $e) {
-        echo "Error fetching data for year $year: " . $e->getMessage() . "\n";
-        break;
+        echo "Error fetching initial segment for year $year: " . $e->getMessage() . "\n";
+        return [false, null];
     }
     
-    // If no movies are found for this year, stop processing further years.
+    $body = json_decode($response->getBody(), true);
     if (empty($body['total_results']) || $body['total_results'] == 0) {
-        echo "No movies found for year $year. Ending process.\n";
-        break;
+        echo "No movies found for year $year with filter " . ($filterDate ?? "none") . ".\n";
+        return [true, null];
     }
     
-    $totalPages = $body['total_pages'];
-    // TMDb limits to a maximum of 500 pages.
-    $pagesToProcess = ($totalPages > 500) ? 500 : $totalPages;
-    echo "Year $year: Found {$body['total_results']} movies in $totalPages pages; processing $pagesToProcess pages.\n";
+    // Process up to 500 pages (TMDb limit).
+    $pagesToProcess = min($body['total_pages'], 500);
+    echo "Year $year with filter (" . ($filterDate ?? "none") . "): processing $pagesToProcess pages.\n";
     
-    // Loop through pages for the current year.
+    $lastMovieDate = null;
     for ($page = 1; $page <= $pagesToProcess; $page++) {
-        echo "Processing year $year, page $page...\n";
         $queryParams['page'] = $page;
         try {
             $response = $client->request('GET', $baseUrl, [
@@ -140,7 +145,14 @@ while (true) {
             continue;
         }
         
+        // Because results are sorted descending by primary_release_date,
+        // the last movie in the entire segment will have the oldest release date.
         foreach ($data['results'] as $movie) {
+            // Update lastMovieDate on every movie processed (it will end up as the last movie’s date).
+            if (!empty($movie['release_date'])) {
+                $lastMovieDate = $movie['release_date'];
+            }
+            
             $tmdb_id           = $movie['id'];
             $adult             = !empty($movie['adult']) ? 1 : 0;
             $backdrop_path     = $movie['backdrop_path'] ?? null;
@@ -149,7 +161,6 @@ while (true) {
             $overview          = $movie['overview'] ?? null;
             $popularity        = isset($movie['popularity']) ? $movie['popularity'] : 0;
             $poster_path       = $movie['poster_path'] ?? null;
-            // Store release_date as a raw string.
             $release_date      = !empty($movie['release_date']) ? $movie['release_date'] : null;
             $title             = $movie['title'] ?? null;
             $video             = !empty($movie['video']) ? 1 : 0;
@@ -175,15 +186,68 @@ while (true) {
                 echo "Bind param failed for tmdb_id $tmdb_id: " . $stmt->error . "\n";
                 continue;
             }
-            
             if (!$stmt->execute()) {
                 echo "Error inserting movie with tmdb_id $tmdb_id: " . $stmt->error . "\n";
             }
         }
     }
     
-    // After processing the current year, move to the previous year.
-    $year--;
+    return [true, $lastMovieDate];
+}
+
+// STEP 3: Loop over years descending starting from 2031.
+// For each year, process segments until no more movies are found.
+for ($year = 2031; $year >= 1900; $year--) {
+    echo "\n=== Processing movies for year: $year ===\n";
+    $segmentFilter = null;
+    
+    while (true) {
+        list($processed, $lastDate) = processSegment($year, $segmentFilter, $client, $baseUrl, $bearerToken, $baseQueryParams, $stmt);
+        if (!$processed) {
+            echo "Error processing segment for year $year.\n";
+            break;
+        }
+        if ($lastDate === null) {
+            // No movies found in this segment; break out.
+            break;
+        }
+        // Check if we might have more movies by applying a filter.
+        // If the current segment returned 500 pages, assume more movies might be available.
+        // Update the segment filter to the last movie's release date.
+        echo "Segment complete. Last movie release_date: $lastDate\n";
+        
+        // Before starting the next segment, make an initial call with the new filter to see if there are more movies.
+        $checkParams = $baseQueryParams;
+        $checkParams['primary_release_year'] = $year;
+        $checkParams['primary_release_date.lte'] = $lastDate;
+        $checkParams['page'] = 1;
+        try {
+            $response = $client->request('GET', $baseUrl, [
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $bearerToken,
+                    'accept'        => 'application/json',
+                ],
+                'query' => $checkParams,
+            ]);
+            $checkBody = json_decode($response->getBody(), true);
+        } catch (Exception $e) {
+            echo "Error checking for additional movies for year $year with filter $lastDate: " . $e->getMessage() . "\n";
+            break;
+        }
+        
+        if (empty($checkBody['total_results']) || $checkBody['total_results'] == 0) {
+            echo "No additional movies found for year $year with filter $lastDate.\n";
+            break;
+        }
+        
+        // Update the filter for the next segment.
+        // To avoid an infinite loop, check if the filter hasn't changed.
+        if ($segmentFilter === $lastDate) {
+            break;
+        }
+        $segmentFilter = $lastDate;
+        echo "Found additional movies for year $year with filter $segmentFilter. Processing next segment...\n";
+    } // End while for segments of this year.
 }
 
 $stmt->close();
