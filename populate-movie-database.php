@@ -2,7 +2,7 @@
 <?php
 // Include Composer's autoloader and your MySQL connection file.
 require_once 'vendor/autoload.php';
-require_once 'mysqlconnect.php'; // This should create a MySQLi connection in $mydb
+require_once 'mysqlconnect.php'; // This file should create a MySQLi connection in $mydb
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ClientException;
@@ -16,16 +16,18 @@ $bearerToken = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJlNzgyMWU0YzQxNDFhNWZiY2FhYzA3Nzd
 // Base URL for the discover movie endpoint.
 $baseUrl = 'https://api.themoviedb.org/3/discover/movie';
 
-// Set base query parameters that don't change.
+// Set base query parameters that remain constant.
 $baseQueryParams = [
-    'include_adult' => 'false',
-    'include_video' => 'false',
-    'language'      => 'en-US',
-    'sort_by'       => 'popularity.desc',
-    // We will add the "primary_release_year" parameter dynamically.
+    'include_adult'          => 'false',
+    'include_video'          => 'false',
+    'language'               => 'en-US',
+    'with_original_language' => 'en',                      // Only movies originally in English.
+    'sort_by'                => 'primary_release_date.desc', // Sort by primary release date descending.
+    // We'll add "primary_release_year" and "page" dynamically.
 ];
 
-// --- STEP 1: Create the movies table (release_date stored as string) ---
+// --- STEP 1: Create the movies table ---
+// Here, release_date is stored as a string.
 $createTableSql = "
 CREATE TABLE IF NOT EXISTS movies (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -51,7 +53,8 @@ if (!$mydb->query($createTableSql)) {
 echo "Movies table created or already exists.\n";
 
 // --- STEP 2: Prepare the insertion query ---
-// Parameter order: tmdb_id (i), adult (i), backdrop_path (s), original_language (s),
+// Parameter order: 
+// tmdb_id (i), adult (i), backdrop_path (s), original_language (s),
 // original_title (s), overview (s), popularity (d), poster_path (s),
 // release_date (s), title (s), video (i), vote_average (d), vote_count (i)
 $insertSql = "
@@ -78,19 +81,17 @@ if (!$stmt) {
     die("Failed to prepare statement: " . $mydb->error . "\n");
 }
 
-// --- STEP 3: Loop over years (newest to oldest) ---
-// We'll start with the current year.
-$year = date('Y');
-
+// --- STEP 3: Loop over years descending starting from 2031 ---
+$year = 2031;
 while (true) {
     echo "\nProcessing movies for year: $year\n";
-    
-    // Build query parameters for this year.
+
+    // Set query parameters for the given year.
     $queryParams = $baseQueryParams;
     $queryParams['primary_release_year'] = $year;
     $queryParams['page'] = 1;
     
-    // Make an initial API call to get total pages for this year.
+    // Initial API call to determine total pages for this year.
     try {
         $response = $client->request('GET', $baseUrl, [
             'headers' => [
@@ -105,18 +106,18 @@ while (true) {
         break;
     }
     
-    // If no movies found for this year, assume there are no more movies and exit.
+    // If no movies are found for this year, stop processing further years.
     if (empty($body['total_results']) || $body['total_results'] == 0) {
         echo "No movies found for year $year. Ending process.\n";
         break;
     }
     
     $totalPages = $body['total_pages'];
-    // TMDb restricts to 500 pages maximum.
+    // TMDb limits to a maximum of 500 pages.
     $pagesToProcess = ($totalPages > 500) ? 500 : $totalPages;
     echo "Year $year: Found {$body['total_results']} movies in $totalPages pages; processing $pagesToProcess pages.\n";
     
-    // Loop over pages for this year.
+    // Loop through pages for the current year.
     for ($page = 1; $page <= $pagesToProcess; $page++) {
         echo "Processing year $year, page $page...\n";
         $queryParams['page'] = $page;
@@ -148,7 +149,7 @@ while (true) {
             $overview          = $movie['overview'] ?? null;
             $popularity        = isset($movie['popularity']) ? $movie['popularity'] : 0;
             $poster_path       = $movie['poster_path'] ?? null;
-            // We store release_date as the raw string provided by the API.
+            // Store release_date as a raw string.
             $release_date      = !empty($movie['release_date']) ? $movie['release_date'] : null;
             $title             = $movie['title'] ?? null;
             $video             = !empty($movie['video']) ? 1 : 0;
@@ -181,7 +182,7 @@ while (true) {
         }
     }
     
-    // After processing all pages for the current year, move to the previous year.
+    // After processing the current year, move to the previous year.
     $year--;
 }
 
