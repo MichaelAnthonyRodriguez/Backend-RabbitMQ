@@ -2,7 +2,7 @@
 <?php
 // Include Composer's autoloader and your MySQL connection file.
 require_once 'vendor/autoload.php';
-require_once 'mysqlconnect.php'; // This file should create a MySQLi connection in $mydb
+require_once 'mysqlconnect.php'; // This should create a MySQLi connection in $mydb
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ClientException;
@@ -13,8 +13,8 @@ $client = new Client();
 // Your TMDb Bearer token.
 $bearerToken = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJlNzgyMWU0YzQxNDFhNWZiY2FhYzA3NzdhYWJiODc2MCIsIm5iZiI6MTc0MTYxNjkwMi4wODMwMDAyLCJzdWIiOiI2N2NlZjcwNjNjMjU0NDQ4ODJlMzFkZTYiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.zHLr6Jcvpr8NdKd4xZvwcqpRhJpO-Y874oXFlP8gqPI';
 
-// Base URL and initial query parameters for the discover movie endpoint.
-$baseUrl = 'https://api.themoviedb.org/3/discover/movie';
+// Base URL and query parameters for the discover movie endpoint.
+// The 'language' parameter ensures results are localized to en-US.
 $queryParams = [
     'include_adult' => 'false',
     'include_video' => 'false',
@@ -23,9 +23,9 @@ $queryParams = [
     'page'          => 1,
 ];
 
-// STEP 1: Get total pages from TMDb.
+// --- STEP 1: Get total pages from TMDb ---
 try {
-    $response = $client->request('GET', $baseUrl, [
+    $response = $client->request('GET', 'https://api.themoviedb.org/3/discover/movie', [
         'headers' => [
             'Authorization' => 'Bearer ' . $bearerToken,
             'accept'        => 'application/json',
@@ -43,32 +43,12 @@ if (!isset($body['total_pages'])) {
 $totalPages = $body['total_pages'];
 echo "Total pages available from TMDb: $totalPages\n";
 
-// STEP 2: Count how many movies are already in the database.
-$countResult = $mydb->query("SELECT COUNT(*) AS total FROM movies");
-if (!$countResult) {
-    die("Error counting movies in database: " . $mydb->error . "\n");
-}
-$row = $countResult->fetch_assoc();
-$dbMovieCount = (int)$row['total'];
-echo "Current movies in database: $dbMovieCount\n";
+// We want to process only up to 500 pages.
+$startPage = 1;
+$endPage = ($totalPages >= 500) ? 500 : $totalPages;
+echo "Processing pages from $startPage to $endPage.\n";
 
-// STEP 3: Calculate pages to skip.
-// Each 10,000 movies = 500 pages. Check remainder to see if it's closer to 10,000.
-$chunks = floor($dbMovieCount / 10000);
-$remainder = $dbMovieCount % 10000;
-$skipPages = $chunks * 500;
-if ($remainder >= 5000) {
-    // Closer to the next 10,000, so skip an extra 500 pages.
-    $skipPages += 500;
-}
-$startPage = $skipPages + 1;
-$endPage = $skipPages + 500;
-if ($endPage > $totalPages) {
-    $endPage = $totalPages;
-}
-echo "Skipping first $skipPages pages. Will process pages $startPage to $endPage.\n";
-
-// STEP 4: Create the movies table (with release_date stored as a string).
+// --- STEP 2: Create the movies table (with release_date as a string) ---
 $createTableSql = "
 CREATE TABLE IF NOT EXISTS movies (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -93,10 +73,7 @@ if (!$mydb->query($createTableSql)) {
 }
 echo "Movies table created or already exists.\n";
 
-// STEP 5: Prepare the insertion query.
-// Parameter order: tmdb_id (i), adult (i), backdrop_path (s), original_language (s),
-// original_title (s), overview (s), popularity (d), poster_path (s),
-// release_date (s), title (s), video (i), vote_average (d), vote_count (i).
+// --- STEP 3: Prepare the insertion query ---
 $insertSql = "
 INSERT INTO movies
     (tmdb_id, adult, backdrop_path, original_language, original_title, overview,
@@ -121,12 +98,17 @@ if (!$stmt) {
     die("Failed to prepare statement: " . $mydb->error . "\n");
 }
 
-// STEP 6: Loop through pages from $startPage to $endPage and process movies as fast as possible.
+// The bind_param() format string must match the following order:
+// tmdb_id (i), adult (i), backdrop_path (s), original_language (s),
+// original_title (s), overview (s), popularity (d), poster_path (s),
+// release_date (s), title (s), video (i), vote_average (d), vote_count (i)
+
+// --- STEP 4: Loop through pages and process movies as fast as possible ---
 for ($page = $startPage; $page <= $endPage; $page++) {
     echo "Processing page $page...\n";
     $queryParams['page'] = $page;
     try {
-        $response = $client->request('GET', $baseUrl, [
+        $response = $client->request('GET', 'https://api.themoviedb.org/3/discover/movie', [
             'headers' => [
                 'Authorization' => 'Bearer ' . $bearerToken,
                 'accept'        => 'application/json',
@@ -153,6 +135,7 @@ for ($page = $startPage; $page <= $endPage; $page++) {
         $overview          = $movie['overview'] ?? null;
         $popularity        = isset($movie['popularity']) ? $movie['popularity'] : 0;
         $poster_path       = $movie['poster_path'] ?? null;
+        // Store release_date as the raw string provided by the API.
         $release_date      = !empty($movie['release_date']) ? $movie['release_date'] : null;
         $title             = $movie['title'] ?? null;
         $video             = !empty($movie['video']) ? 1 : 0;
