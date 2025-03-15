@@ -13,17 +13,18 @@ $client = new Client();
 // Your TMDb Bearer token.
 $bearerToken = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJlNzgyMWU0YzQxNDFhNWZiY2FhYzA3NzdhYWJiODc2MCIsIm5iZiI6MTc0MTYxNjkwMi4wODMwMDAyLCJzdWIiOiI2N2NlZjcwNjNjMjU0NDQ4ODJlMzFkZTYiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.zHLr6Jcvpr8NdKd4xZvwcqpRhJpO-Y874oXFlP8gqPI';
 
-// Base URL and query parameters for the discover movie endpoint.
-// The 'language' parameter ensures results are localized to en-US.
+// Base URL and initial query parameters for the discover movie endpoint.
+// Added 'with_original_language' => 'en' to filter for movies where original_language is "en".
 $queryParams = [
-    'include_adult' => 'false',
-    'include_video' => 'false',
-    'language'      => 'en-US',
-    'sort_by'       => 'popularity.desc',
-    'page'          => 1,
+    'include_adult'         => 'false',
+    'include_video'         => 'false',
+    'language'              => 'en-US',
+    'sort_by'               => 'popularity.desc',
+    'with_original_language'=> 'en',
+    'page'                  => 1,
 ];
 
-// --- STEP 1: Get total pages from TMDb ---
+// --- STEP 1: Get total_pages from the first API call ---
 try {
     $response = $client->request('GET', 'https://api.themoviedb.org/3/discover/movie', [
         'headers' => [
@@ -43,12 +44,12 @@ if (!isset($body['total_pages'])) {
 $totalPages = $body['total_pages'];
 echo "Total pages available from TMDb: $totalPages\n";
 
-// We want to process only up to 500 pages.
+// We will process pages 1 to 500 (or fewer if total_pages is less than 500)
 $startPage = 1;
-$endPage = ($totalPages >= 500) ? 500 : $totalPages;
+$endPage = ($totalPages < 500) ? $totalPages : 500;
 echo "Processing pages from $startPage to $endPage.\n";
 
-// --- STEP 2: Create the movies table (with release_date as a string) ---
+// --- STEP 2: Create the movies table (store release_date as a string) ---
 $createTableSql = "
 CREATE TABLE IF NOT EXISTS movies (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -68,12 +69,16 @@ CREATE TABLE IF NOT EXISTS movies (
     created_at BIGINT UNSIGNED NOT NULL DEFAULT (UNIX_TIMESTAMP())
 ) ENGINE=InnoDB;
 ";
+
 if (!$mydb->query($createTableSql)) {
     die("Failed to create table: " . $mydb->error . "\n");
 }
 echo "Movies table created or already exists.\n";
 
 // --- STEP 3: Prepare the insertion query ---
+// Parameter order: tmdb_id (i), adult (i), backdrop_path (s), original_language (s),
+// original_title (s), overview (s), popularity (d), poster_path (s),
+// release_date (s), title (s), video (i), vote_average (d), vote_count (i)
 $insertSql = "
 INSERT INTO movies
     (tmdb_id, adult, backdrop_path, original_language, original_title, overview,
@@ -98,15 +103,11 @@ if (!$stmt) {
     die("Failed to prepare statement: " . $mydb->error . "\n");
 }
 
-// The bind_param() format string must match the following order:
-// tmdb_id (i), adult (i), backdrop_path (s), original_language (s),
-// original_title (s), overview (s), popularity (d), poster_path (s),
-// release_date (s), title (s), video (i), vote_average (d), vote_count (i)
-
-// --- STEP 4: Loop through pages and process movies as fast as possible ---
+// --- STEP 4: Loop through pages from 1 to 500 (or total_pages if less than 500) ---
 for ($page = $startPage; $page <= $endPage; $page++) {
     echo "Processing page $page...\n";
     $queryParams['page'] = $page;
+    
     try {
         $response = $client->request('GET', 'https://api.themoviedb.org/3/discover/movie', [
             'headers' => [
@@ -135,7 +136,6 @@ for ($page = $startPage; $page <= $endPage; $page++) {
         $overview          = $movie['overview'] ?? null;
         $popularity        = isset($movie['popularity']) ? $movie['popularity'] : 0;
         $poster_path       = $movie['poster_path'] ?? null;
-        // Store release_date as the raw string provided by the API.
         $release_date      = !empty($movie['release_date']) ? $movie['release_date'] : null;
         $title             = $movie['title'] ?? null;
         $video             = !empty($movie['video']) ? 1 : 0;
