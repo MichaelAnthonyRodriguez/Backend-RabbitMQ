@@ -11,7 +11,7 @@ use GuzzleHttp\Exception\ClientException;
 $client = new Client();
 
 // Your TMDb Bearer token
-$bearerToken = 'YOUR_TMDB_BEARER_TOKEN';
+$bearerToken = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJlNzgyMWU0YzQxNDFhNWZiY2FhYzA3NzdhYWJiODc2MCIsIm5iZiI6MTc0MTYxNjkwMi4wODMwMDAyLCJzdWIiOiI2N2NlZjcwNjNjMjU0NDQ4ODJlMzFkZTYiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.zHLr6Jcvpr8NdKd4xZvwcqpRhJpO-Y874oXFlP8gqPI';
 
 // Base URL and initial query parameters for the discover movie endpoint
 $baseUrl = 'https://api.themoviedb.org/3/discover/movie';
