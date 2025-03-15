@@ -188,6 +188,27 @@ function doSearch($movie_title)
     return ["status" => "success", "movies" => $movies];
 }
 
+//Movie details function
+function doMovieDetails($tmdb_id)
+{
+    global $mydb;
+    // Query the local movies table for the movie with the given tmdb_id
+    $query = "SELECT tmdb_id, poster_path, title, overview, release_date, vote_average FROM movies WHERE tmdb_id = ?";
+    $stmt = $mydb->prepare($query);
+    if(!$stmt){
+        return ["status" => "error", "message" => "Database error: " . $mydb->error];
+    }
+    $stmt->bind_param("i", $tmdb_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    if($result->num_rows == 0){
+        return ["status" => "error", "message" => "Movie not found."];
+    }
+    $movie = $result->fetch_assoc();
+    $stmt->close();
+    return ["status" => "success", "movie" => $movie];
+}
+
 // Processes rabbitmq requests
 function requestProcessor($request)
 {
@@ -210,6 +231,8 @@ function requestProcessor($request)
         return doLogout($request['session_token']);
     case "search":
         return doSearch($request['movie_title']);
+    case "movie_details":
+        return doMovieDetails($request['tmdb_id']);
   }
   return array("returnCode" => '0', 'message'=>"Server received request and processed");
 }
