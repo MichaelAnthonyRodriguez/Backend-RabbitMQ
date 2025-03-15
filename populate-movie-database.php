@@ -13,43 +13,19 @@ $client = new Client();
 // Your TMDb Bearer token.
 $bearerToken = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJlNzgyMWU0YzQxNDFhNWZiY2FhYzA3NzdhYWJiODc2MCIsIm5iZiI6MTc0MTYxNjkwMi4wODMwMDAyLCJzdWIiOiI2N2NlZjcwNjNjMjU0NDQ4ODJlMzFkZTYiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.zHLr6Jcvpr8NdKd4xZvwcqpRhJpO-Y874oXFlP8gqPI';
 
-// Base URL and initial query parameters for the discover movie endpoint.
-// Added 'with_original_language' => 'en' to filter for movies where original_language is "en".
-$queryParams = [
-    'include_adult'         => 'false',
-    'include_video'         => 'false',
-    'language'              => 'en-US',
-    'sort_by'               => 'popularity.desc',
-    'with_original_language'=> 'en',
-    'page'                  => 1,
+// Base URL for the discover movie endpoint.
+$baseUrl = 'https://api.themoviedb.org/3/discover/movie';
+
+// Set base query parameters that don't change.
+$baseQueryParams = [
+    'include_adult' => 'false',
+    'include_video' => 'false',
+    'language'      => 'en-US',
+    'sort_by'       => 'popularity.desc',
+    // We will add the "primary_release_year" parameter dynamically.
 ];
 
-// --- STEP 1: Get total_pages from the first API call ---
-try {
-    $response = $client->request('GET', 'https://api.themoviedb.org/3/discover/movie', [
-        'headers' => [
-            'Authorization' => 'Bearer ' . $bearerToken,
-            'accept'        => 'application/json',
-        ],
-        'query' => $queryParams,
-    ]);
-    $body = json_decode($response->getBody(), true);
-} catch (Exception $e) {
-    die("Error fetching first page: " . $e->getMessage() . "\n");
-}
-
-if (!isset($body['total_pages'])) {
-    die("Error: total_pages not found in response.\n");
-}
-$totalPages = $body['total_pages'];
-echo "Total pages available from TMDb: $totalPages\n";
-
-// We will process pages 1 to 500 (or fewer if total_pages is less than 500)
-$startPage = 1;
-$endPage = ($totalPages < 500) ? $totalPages : 500;
-echo "Processing pages from $startPage to $endPage.\n";
-
-// --- STEP 2: Create the movies table (store release_date as a string) ---
+// --- STEP 1: Create the movies table (release_date stored as string) ---
 $createTableSql = "
 CREATE TABLE IF NOT EXISTS movies (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -61,7 +37,7 @@ CREATE TABLE IF NOT EXISTS movies (
     overview TEXT,
     popularity DECIMAL(7,2),
     poster_path VARCHAR(255),
-    release_date VARCHAR(20),  -- storing as string
+    release_date VARCHAR(20),  -- storing as a string
     title VARCHAR(255),
     video BOOLEAN,
     vote_average DECIMAL(3,1),
@@ -69,13 +45,12 @@ CREATE TABLE IF NOT EXISTS movies (
     created_at BIGINT UNSIGNED NOT NULL DEFAULT (UNIX_TIMESTAMP())
 ) ENGINE=InnoDB;
 ";
-
 if (!$mydb->query($createTableSql)) {
     die("Failed to create table: " . $mydb->error . "\n");
 }
 echo "Movies table created or already exists.\n";
 
-// --- STEP 3: Prepare the insertion query ---
+// --- STEP 2: Prepare the insertion query ---
 // Parameter order: tmdb_id (i), adult (i), backdrop_path (s), original_language (s),
 // original_title (s), overview (s), popularity (d), poster_path (s),
 // release_date (s), title (s), video (i), vote_average (d), vote_count (i)
@@ -103,71 +78,113 @@ if (!$stmt) {
     die("Failed to prepare statement: " . $mydb->error . "\n");
 }
 
-// --- STEP 4: Loop through pages from 1 to 500 (or total_pages if less than 500) ---
-for ($page = $startPage; $page <= $endPage; $page++) {
-    echo "Processing page $page...\n";
-    $queryParams['page'] = $page;
+// --- STEP 3: Loop over years (newest to oldest) ---
+// We'll start with the current year.
+$year = date('Y');
+
+while (true) {
+    echo "\nProcessing movies for year: $year\n";
     
+    // Build query parameters for this year.
+    $queryParams = $baseQueryParams;
+    $queryParams['primary_release_year'] = $year;
+    $queryParams['page'] = 1;
+    
+    // Make an initial API call to get total pages for this year.
     try {
-        $response = $client->request('GET', 'https://api.themoviedb.org/3/discover/movie', [
+        $response = $client->request('GET', $baseUrl, [
             'headers' => [
                 'Authorization' => 'Bearer ' . $bearerToken,
                 'accept'        => 'application/json',
             ],
             'query' => $queryParams,
         ]);
+        $body = json_decode($response->getBody(), true);
     } catch (Exception $e) {
-        echo "Error fetching page $page: " . $e->getMessage() . "\n";
-        continue;
+        echo "Error fetching data for year $year: " . $e->getMessage() . "\n";
+        break;
     }
     
-    $data = json_decode($response->getBody(), true);
-    if (!isset($data['results'])) {
-        echo "No results on page $page.\n";
-        continue;
+    // If no movies found for this year, assume there are no more movies and exit.
+    if (empty($body['total_results']) || $body['total_results'] == 0) {
+        echo "No movies found for year $year. Ending process.\n";
+        break;
     }
     
-    foreach ($data['results'] as $movie) {
-        $tmdb_id           = $movie['id'];
-        $adult             = !empty($movie['adult']) ? 1 : 0;
-        $backdrop_path     = $movie['backdrop_path'] ?? null;
-        $original_language = $movie['original_language'] ?? null;
-        $original_title    = $movie['original_title'] ?? null;
-        $overview          = $movie['overview'] ?? null;
-        $popularity        = isset($movie['popularity']) ? $movie['popularity'] : 0;
-        $poster_path       = $movie['poster_path'] ?? null;
-        $release_date      = !empty($movie['release_date']) ? $movie['release_date'] : null;
-        $title             = $movie['title'] ?? null;
-        $video             = !empty($movie['video']) ? 1 : 0;
-        $vote_average      = isset($movie['vote_average']) ? $movie['vote_average'] : 0;
-        $vote_count        = isset($movie['vote_count']) ? $movie['vote_count'] : 0;
-        
-        if (!$stmt->bind_param(
-            "iissssdsissdi",
-            $tmdb_id,
-            $adult,
-            $backdrop_path,
-            $original_language,
-            $original_title,
-            $overview,
-            $popularity,
-            $poster_path,
-            $release_date,
-            $title,
-            $video,
-            $vote_average,
-            $vote_count
-        )) {
-            echo "Bind param failed for tmdb_id $tmdb_id: " . $stmt->error . "\n";
+    $totalPages = $body['total_pages'];
+    // TMDb restricts to 500 pages maximum.
+    $pagesToProcess = ($totalPages > 500) ? 500 : $totalPages;
+    echo "Year $year: Found {$body['total_results']} movies in $totalPages pages; processing $pagesToProcess pages.\n";
+    
+    // Loop over pages for this year.
+    for ($page = 1; $page <= $pagesToProcess; $page++) {
+        echo "Processing year $year, page $page...\n";
+        $queryParams['page'] = $page;
+        try {
+            $response = $client->request('GET', $baseUrl, [
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $bearerToken,
+                    'accept'        => 'application/json',
+                ],
+                'query' => $queryParams,
+            ]);
+        } catch (Exception $e) {
+            echo "Error fetching year $year, page $page: " . $e->getMessage() . "\n";
             continue;
         }
         
-        if (!$stmt->execute()) {
-            echo "Error inserting movie with tmdb_id $tmdb_id: " . $stmt->error . "\n";
+        $data = json_decode($response->getBody(), true);
+        if (!isset($data['results'])) {
+            echo "No results on year $year, page $page.\n";
+            continue;
+        }
+        
+        foreach ($data['results'] as $movie) {
+            $tmdb_id           = $movie['id'];
+            $adult             = !empty($movie['adult']) ? 1 : 0;
+            $backdrop_path     = $movie['backdrop_path'] ?? null;
+            $original_language = $movie['original_language'] ?? null;
+            $original_title    = $movie['original_title'] ?? null;
+            $overview          = $movie['overview'] ?? null;
+            $popularity        = isset($movie['popularity']) ? $movie['popularity'] : 0;
+            $poster_path       = $movie['poster_path'] ?? null;
+            // We store release_date as the raw string provided by the API.
+            $release_date      = !empty($movie['release_date']) ? $movie['release_date'] : null;
+            $title             = $movie['title'] ?? null;
+            $video             = !empty($movie['video']) ? 1 : 0;
+            $vote_average      = isset($movie['vote_average']) ? $movie['vote_average'] : 0;
+            $vote_count        = isset($movie['vote_count']) ? $movie['vote_count'] : 0;
+            
+            if (!$stmt->bind_param(
+                "iissssdsissdi",
+                $tmdb_id,
+                $adult,
+                $backdrop_path,
+                $original_language,
+                $original_title,
+                $overview,
+                $popularity,
+                $poster_path,
+                $release_date,
+                $title,
+                $video,
+                $vote_average,
+                $vote_count
+            )) {
+                echo "Bind param failed for tmdb_id $tmdb_id: " . $stmt->error . "\n";
+                continue;
+            }
+            
+            if (!$stmt->execute()) {
+                echo "Error inserting movie with tmdb_id $tmdb_id: " . $stmt->error . "\n";
+            }
         }
     }
+    
+    // After processing all pages for the current year, move to the previous year.
+    $year--;
 }
 
 $stmt->close();
-echo "Movie import completed.\n";
+echo "\nMovie import completed.\n";
 ?>
