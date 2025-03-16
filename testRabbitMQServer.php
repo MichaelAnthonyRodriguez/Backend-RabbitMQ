@@ -674,6 +674,8 @@ function requestProcessor($request) {
             return doGetTriviaHighscore($request['user_id']);
         case "update_movie_latest":
             return doUpdateMovieLatest($request['movie']);
+        case "update_movies":
+            return doUpdateMovies();
     }
     return ["returnCode" => '0', "message" => "Server received request and processed"];
 }
