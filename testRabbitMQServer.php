@@ -2,11 +2,11 @@
 <?php
 require_once('path.inc');
 require_once('get_host_info.inc');
-require_once('rabbitMQLib.inc'); // Includes the RabbitMQ Library
-require_once('mysqlconnect.php'); // Includes the database config
-require_once('populateDB.php');  // Populates the database with schema
+require_once('rabbitMQLib.inc');  // Includes the RabbitMQ Library
+require_once('mysqlconnect.php');  // Includes the database config
+require_once('populateDB.php');   // Populates the database with schema
 
-// Login function
+// LOGIN FUNCTION
 function doLogin($username, $password)
 {
     global $mydb;
@@ -48,7 +48,7 @@ function doLogin($username, $password)
     ];
 }
 
-// Session validation function
+// SESSION VALIDATION FUNCTION
 function doValidate($sessionToken)
 {
     global $mydb;
@@ -66,7 +66,7 @@ function doValidate($sessionToken)
     return ["status" => "success", "message" => "Session is valid."];
 }
 
-// Registration function
+// REGISTRATION FUNCTION
 function doRegister($first, $last, $username, $email, $password)
 {
     global $mydb;
@@ -95,7 +95,7 @@ function doRegister($first, $last, $username, $email, $password)
     }
 }
 
-// Logout function
+// LOGOUT FUNCTION
 function doLogout($sessionToken)
 {
     global $mydb;
@@ -123,7 +123,7 @@ function doLogout($sessionToken)
     }
 }
 
-// Movie search function
+// MOVIE SEARCH FUNCTION
 function doSearch($movie_title)
 {
     global $mydb;
@@ -145,27 +145,7 @@ function doSearch($movie_title)
     return ["status" => "success", "movies" => $movies];
 }
 
-// Movie details function
-function doMovieDetails($tmdb_id)
-{
-    global $mydb;
-    $query = "SELECT tmdb_id, poster_path, title, overview, release_date, vote_average FROM movies WHERE tmdb_id = ?";
-    $stmt = $mydb->prepare($query);
-    if(!$stmt){
-        return ["status" => "error", "message" => "Database error: " . $mydb->error];
-    }
-    $stmt->bind_param("i", $tmdb_id);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    if($result->num_rows == 0){
-        return ["status" => "error", "message" => "Movie not found."];
-    }
-    $movie = $result->fetch_assoc();
-    $stmt->close();
-    return ["status" => "success", "movie" => $movie];
-}
-
-// Popular (Top) movies function
+// TOP MOVIES FUNCTION
 function doTopMovies($year = null)
 {
     global $mydb;
@@ -196,7 +176,7 @@ function doTopMovies($year = null)
     return ["status" => "success", "movies" => $movies];
 }
 
-// User watchlist function
+// USER WATCHLIST FUNCTION
 function doWatchlist($user_id)
 {
     global $mydb;
@@ -222,10 +202,9 @@ function doWatchlist($user_id)
     return ["status" => "success", "movies" => $movies];
 }
 
-// Review adder function
+// REVIEW ADDER FUNCTION
 function doAddReview($user_id, $tmdb_id, $watchlist, $rating, $review) {
     global $mydb;
-    // Check if there is already an entry for this user and movie.
     $query = "SELECT id FROM user_movies WHERE user_id = ? AND movie_id = (
                 SELECT id FROM movies WHERE tmdb_id = ?
               )";
@@ -288,9 +267,25 @@ function doAddReview($user_id, $tmdb_id, $watchlist, $rating, $review) {
     }
 }
 
-// Review getter function
-function doGetReviews($tmdb_id) {
+// COMBINED MOVIE DETAILS & REVIEWS FUNCTION
+function doMovieFullDetails($tmdb_id) {
     global $mydb;
+    // Get movie details
+    $query = "SELECT tmdb_id, poster_path, title, overview, release_date, vote_average FROM movies WHERE tmdb_id = ?";
+    $stmt = $mydb->prepare($query);
+    if(!$stmt){
+       return ["status" => "error", "message" => "Database error: " . $mydb->error];
+    }
+    $stmt->bind_param("i", $tmdb_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    if($result->num_rows == 0){
+         return ["status" => "error", "message" => "Movie not found."];
+    }
+    $movie = $result->fetch_assoc();
+    $stmt->close();
+    
+    // Get reviews for this movie
     $query = "SELECT u.username, um.rating, um.review, FROM_UNIXTIME(um.created_at) as review_date
               FROM user_movies um
               JOIN users u ON um.user_id = u.id
@@ -299,27 +294,28 @@ function doGetReviews($tmdb_id) {
               ORDER BY um.created_at DESC";
     $stmt = $mydb->prepare($query);
     if(!$stmt){
-        return ["status" => "error", "message" => "Database error: " . $mydb->error];
+         return ["status" => "error", "message" => "Database error: " . $mydb->error];
     }
     $stmt->bind_param("i", $tmdb_id);
     $stmt->execute();
     $result = $stmt->get_result();
     $reviews = [];
     while($row = $result->fetch_assoc()){
-        $reviews[] = $row;
+         $reviews[] = $row;
     }
     $stmt->close();
-    if(count($reviews) == 0){
-        return ["status" => "success", "reviews" => [], "message" => "No reviews found for this movie."];
+    
+    $movie["reviews"] = $reviews;
+    if(empty($reviews)){
+         $movie["reviews_message"] = "No reviews found for this movie.";
     }
-    return ["status" => "success", "reviews" => $reviews];
+    return ["status" => "success", "movie" => $movie];
 }
 
-// Processes rabbitmq requests
+// REQUEST PROCESSOR FUNCTION
 function requestProcessor($request)
 {
-    echo "processing requests rn".PHP_EOL;
-    echo "received request".PHP_EOL;
+    echo "Processing request...\n";
     var_dump($request);
     if(!isset($request['type'])) {
         return "ERROR: unsupported message type";
@@ -337,7 +333,10 @@ function requestProcessor($request)
         case "search":
             return doSearch($request['movie_title']);
         case "movie_details":
-            return doMovieDetails($request['tmdb_id']);
+            // Optionally you could remove this case if all details should be combined.
+            return doMovieFullDetails($request['tmdb_id']);
+        case "full_movie_details":
+            return doMovieFullDetails($request['tmdb_id']);
         case "top_movies":
             $year = isset($request['year']) ? $request['year'] : date("Y");
             return doTopMovies($year);
@@ -346,13 +345,13 @@ function requestProcessor($request)
         case "add_review":
             return doAddReview($request['user_id'], $request['tmdb_id'], $request['watchlist'], $request['rating'], $request['review']);
         case "get_reviews":
-            return doGetReviews($request['tmdb_id']);
+            // Optionally remove this case if full details includes reviews.
+            return doMovieFullDetails($request['tmdb_id']);
     }
     return ["returnCode" => '0', "message" => "Server received request and processed"];
 }
 
-$server = new rabbitMQServer("testRabbitMQ.ini","testServer");
-
-echo "testRabbitMQServer BEGIN".PHP_EOL;
+$server = new rabbitMQServer("testRabbitMQ.ini", "testServer");
+echo "testRabbitMQServer BEGIN" . PHP_EOL;
 $server->process_requests("requestProcessor");
 ?>
