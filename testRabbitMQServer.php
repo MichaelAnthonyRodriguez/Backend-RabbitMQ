@@ -209,6 +209,67 @@ function doMovieDetails($tmdb_id)
     return ["status" => "success", "movie" => $movie];
 }
 
+//Popular movies function
+function doTopMovies($year = null)
+{
+    global $mydb;
+    // If no year is provided, use the current year.
+    if ($year === null) {
+        $year = date("Y");
+    }
+    // Query for movies whose release_date (stored as string "YYYY-MM-DD")
+    // starts with the provided year and that have been released (<= today's date).
+    $query = "SELECT tmdb_id, poster_path, title, overview, release_date, popularity 
+              FROM movies 
+              WHERE LEFT(release_date, 4) = ? 
+                AND release_date <= CURDATE()
+              ORDER BY popularity DESC 
+              LIMIT 10";
+    $stmt = $mydb->prepare($query);
+    if (!$stmt) {
+        return ["status" => "error", "message" => "Database error: " . $mydb->error];
+    }
+    $stmt->bind_param("s", $year);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $movies = [];
+    while ($row = $result->fetch_assoc()) {
+        $movies[] = $row;
+    }
+    $stmt->close();
+    if (count($movies) === 0) {
+        return ["status" => "error", "message" => "No movies found for year $year."];
+    }
+    return ["status" => "success", "movies" => $movies];
+}
+
+//User watchlist function
+function doWatchlist($user_id)
+{
+    global $mydb;
+    // Query the database: join movies and user_movies to get movie details for the user's watchlist.
+    $query = "SELECT m.tmdb_id, m.poster_path, m.title, m.release_date, m.overview, m.vote_average 
+              FROM movies m 
+              JOIN user_movies um ON m.id = um.movie_id 
+              WHERE um.user_id = ? AND um.watchlist = 1";
+    $stmt = $mydb->prepare($query);
+    if (!$stmt) {
+        return ["status" => "error", "message" => "Database error: " . $mydb->error];
+    }
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $movies = [];
+    while ($row = $result->fetch_assoc()){
+        $movies[] = $row;
+    }
+    $stmt->close();
+    if (count($movies) == 0) {
+        return ["status" => "error", "message" => "No movies found in watchlist."];
+    }
+    return ["status" => "success", "movies" => $movies];
+}
+
 // Processes rabbitmq requests
 function requestProcessor($request)
 {
@@ -233,6 +294,11 @@ function requestProcessor($request)
         return doSearch($request['movie_title']);
     case "movie_details":
         return doMovieDetails($request['tmdb_id']);
+    case "top_movies":
+        $year = isset($request['year']) ? $request['year'] : date("Y");
+        return doTopMovies($year);
+    case "watchlist":
+        return doWatchlist($request['user_id']);
   }
   return array("returnCode" => '0', 'message'=>"Server received request and processed");
 }
