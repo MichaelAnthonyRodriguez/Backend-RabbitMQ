@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS movies (
     overview TEXT,
     popularity DECIMAL(7,2),
     poster_path VARCHAR(255),
-    release_date VARCHAR(255),  -- Changed to string
+    release_date VARCHAR(10),  -- Changed to string
     title VARCHAR(255),
     video BOOLEAN,
     vote_average DECIMAL(3,1),

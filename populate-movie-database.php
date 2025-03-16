@@ -53,7 +53,7 @@ if (!$mydb->query($createTableSql)) {
 echo "Movies table created or already exists.\n";
 
 // STEP 2: Prepare the insertion query.
-// Bind_param() format string: 
+// Bind_param() format string:
 // tmdb_id (i), adult (i), backdrop_path (s), original_language (s),
 // original_title (s), overview (s), popularity (d), poster_path (s),
 // release_date (s), title (s), video (i), vote_average (d), vote_count (i)
@@ -148,10 +148,9 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
         foreach ($data['results'] as $movie) {
             if (!empty($movie['release_date'])) {
                 $rawDate = trim($movie['release_date']);
-                // Debug: output the raw date value.
-                echo "Raw release date: '$rawDate'\n";
-                // If the raw date is only 4 digits, append "-01-01"
-                if (strlen($rawDate) == 4) {
+                echo "Raw release date: '$rawDate' (length: " . strlen($rawDate) . ")\n";
+                // If the raw date is exactly 4 digits (only year), append "-01-01"
+                if (preg_match('/^\d{4}$/', $rawDate)) {
                     $release_date = $rawDate . "-01-01";
                 } else {
                     $release_date = $rawDate;
@@ -176,7 +175,7 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
             $vote_average      = isset($movie['vote_average']) ? $movie['vote_average'] : 0;
             $vote_count        = isset($movie['vote_count']) ? $movie['vote_count'] : 0;
             
-            // Updated bind_param format: "iissssdsisssi" (release_date as string)
+            // Bind parameters: "iissssdsisssi"
             if (!$stmt->bind_param(
                 "iissssdsisssi",
                 $tmdb_id,
@@ -205,7 +204,7 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
     return [true, $lastMovieDate];
 }
 
-// STEP 3: Loop over years descending starting from 2031.
+// Loop over years descending starting from 2031.
 // For each year, process segments until no more movies are found.
 for ($year = 2031; $year >= 1900; $year--) {
     echo "\n=== Processing movies for year: $year ===\n";
