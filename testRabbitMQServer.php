@@ -270,6 +270,105 @@ function doWatchlist($user_id)
     return ["status" => "success", "movies" => $movies];
 }
 
+//Review adder function
+function doAddReview($user_id, $tmdb_id, $watchlist, $rating, $review) {
+    global $mydb;
+    
+    // First, check if there is already an entry for this user and movie.
+    $query = "SELECT id FROM user_movies WHERE user_id = ? AND movie_id = (
+                SELECT id FROM movies WHERE tmdb_id = ?
+              )";
+    $stmt = $mydb->prepare($query);
+    if(!$stmt){
+        return ["status" => "error", "message" => "Database error: " . $mydb->error];
+    }
+    $stmt->bind_param("ii", $user_id, $tmdb_id);
+    $stmt->execute();
+    $stmt->store_result();
+    if($stmt->num_rows > 0){
+        // Update existing entry.
+        $stmt->bind_result($id);
+        $stmt->fetch();
+        $stmt->close();
+        
+        $updateQuery = "UPDATE user_movies 
+                        SET watchlist = ?, rating = ?, review = ?, created_at = UNIX_TIMESTAMP()
+                        WHERE id = ?";
+        $updateStmt = $mydb->prepare($updateQuery);
+        if(!$updateStmt){
+            return ["status" => "error", "message" => "Database error: " . $mydb->error];
+        }
+        $updateStmt->bind_param("isii", $watchlist, $rating, $review, $id);
+        if($updateStmt->execute()){
+            $updateStmt->close();
+            return ["status" => "success", "message" => "Review updated."];
+        } else {
+            $updateStmt->close();
+            return ["status" => "error", "message" => "Failed to update review: " . $mydb->error];
+        }
+    } else {
+        $stmt->close();
+        // Insert new entry. We need to convert the tmdb_id into the internal movie_id.
+        // We assume movies table is already populated.
+        $selectQuery = "SELECT id FROM movies WHERE tmdb_id = ?";
+        $selectStmt = $mydb->prepare($selectQuery);
+        if(!$selectStmt){
+            return ["status" => "error", "message" => "Database error: " . $mydb->error];
+        }
+        $selectStmt->bind_param("i", $tmdb_id);
+        $selectStmt->execute();
+        $selectStmt->bind_result($movie_id);
+        if(!$selectStmt->fetch()){
+            $selectStmt->close();
+            return ["status" => "error", "message" => "Movie not found in local database."];
+        }
+        $selectStmt->close();
+        
+        $insertQuery = "INSERT INTO user_movies (user_id, movie_id, watchlist, rating, review, created_at)
+                        VALUES (?, ?, ?, ?, ?, UNIX_TIMESTAMP())";
+        $insertStmt = $mydb->prepare($insertQuery);
+        if(!$insertStmt){
+            return ["status" => "error", "message" => "Database error: " . $mydb->error];
+        }
+        $insertStmt->bind_param("iiiss", $user_id, $movie_id, $watchlist, $rating, $review);
+        if($insertStmt->execute()){
+            $insertStmt->close();
+            return ["status" => "success", "message" => "Review added."];
+        } else {
+            $insertStmt->close();
+            return ["status" => "error", "message" => "Failed to add review: " . $mydb->error];
+        }
+    }
+}
+
+//Review getter function
+function doGetReviews($tmdb_id) {
+    global $mydb;
+    // Join user_movies with users so you can show the reviewer's name.
+    $query = "SELECT u.username, um.rating, um.review, FROM_UNIXTIME(um.created_at) as review_date
+              FROM user_movies um
+              JOIN users u ON um.user_id = u.id
+              JOIN movies m ON m.id = um.movie_id
+              WHERE m.tmdb_id = ?
+              ORDER BY um.created_at DESC";
+    $stmt = $mydb->prepare($query);
+    if(!$stmt){
+        return ["status" => "error", "message" => "Database error: " . $mydb->error];
+    }
+    $stmt->bind_param("i", $tmdb_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $reviews = [];
+    while ($row = $result->fetch_assoc()) {
+        $reviews[] = $row;
+    }
+    $stmt->close();
+    if(count($reviews) == 0){
+        return ["status" => "error", "message" => "No reviews found for this movie."];
+    }
+    return ["status" => "success", "reviews" => $reviews];
+}
+
 // Processes rabbitmq requests
 function requestProcessor($request)
 {
@@ -299,6 +398,10 @@ function requestProcessor($request)
         return doTopMovies($year);
     case "watchlist":
         return doWatchlist($request['user_id']);
+    case "add_review":
+        return doAddReview($request['user_id'], $request['tmdb_id'], $request['watchlist'], $request['rating'], $request['review']);
+    case "get_reviews":
+        return doGetReviews($request['tmdb_id']);
   }
   return array("returnCode" => '0', 'message'=>"Server received request and processed");
 }
