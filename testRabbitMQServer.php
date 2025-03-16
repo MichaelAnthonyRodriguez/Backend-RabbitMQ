@@ -2,9 +2,9 @@
 <?php
 require_once('path.inc');
 require_once('get_host_info.inc');
-require_once('rabbitMQLib.inc');  // Includes the RabbitMQ Library
-require_once('mysqlconnect.php');  // Includes the database config
-require_once('populateDB.php');   // Populates the database with schema
+require_once('rabbitMQLib.inc');  // RabbitMQ Library
+require_once('mysqlconnect.php');  // Sets up $mydb connection
+require_once('populateDB.php');   // Populates the database schema
 
 // ---------------------------
 // USER FUNCTIONS
@@ -148,25 +148,6 @@ function doSearch($movie_title) {
     return ["status" => "success", "movies" => $movies];
 }
 
-// Movie details function (basic details only)
-function doMovieDetails($tmdb_id) {
-    global $mydb;
-    $query = "SELECT tmdb_id, poster_path, title, overview, release_date, vote_average FROM movies WHERE tmdb_id = ?";
-    $stmt = $mydb->prepare($query);
-    if(!$stmt){
-        return ["status" => "error", "message" => "Database error: " . $mydb->error];
-    }
-    $stmt->bind_param("i", $tmdb_id);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    if($result->num_rows == 0){
-        return ["status" => "error", "message" => "Movie not found."];
-    }
-    $movie = $result->fetch_assoc();
-    $stmt->close();
-    return ["status" => "success", "movie" => $movie];
-}
-
 // Top movies function
 function doTopMovies($year = null) {
     global $mydb;
@@ -224,7 +205,7 @@ function doWatchlist($user_id) {
 
 // ---------------------------
 // REVIEW UPDATE FUNCTIONS
-// These functions update only one field at a time.
+// These functions update one field at a time.
 // ---------------------------
 
 // Update Watchlist only
@@ -407,7 +388,9 @@ function doUpdateReview($user_id, $tmdb_id, $review) {
     }
 }
 
+// ---------------------------
 // COMBINED MOVIE DETAILS & REVIEWS FUNCTION
+// ---------------------------
 function doMovieFullDetails($tmdb_id) {
     global $mydb;
     // Get movie details.
@@ -452,7 +435,9 @@ function doMovieFullDetails($tmdb_id) {
     return ["status" => "success", "movie" => $movie];
 }
 
+// ---------------------------
 // REQUEST PROCESSOR FUNCTION
+// ---------------------------
 function requestProcessor($request) {
     echo "Processing request...\n";
     var_dump($request);
