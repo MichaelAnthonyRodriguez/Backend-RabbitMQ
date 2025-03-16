@@ -27,7 +27,7 @@ $baseQueryParams = [
 ];
 
 // STEP 1: Create the movies table.
-// Now, release_date is stored as a DATE.
+// Here, release_date is stored as a string.
 $createTableSql = "
 CREATE TABLE IF NOT EXISTS movies (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS movies (
     overview TEXT,
     popularity DECIMAL(7,2),
     poster_path VARCHAR(255),
-    release_date DATE,
+    release_date VARCHAR(255),  -- Storing as string
     title VARCHAR(255),
     video BOOLEAN,
     vote_average DECIMAL(3,1),
@@ -53,6 +53,10 @@ if (!$mydb->query($createTableSql)) {
 echo "Movies table created or already exists.\n";
 
 // STEP 2: Prepare the insertion query.
+// The bind_param() format string now uses "s" for release_date.
+// Order: tmdb_id (i), adult (i), backdrop_path (s), original_language (s),
+// original_title (s), overview (s), popularity (d), poster_path (s),
+// release_date (s), title (s), video (i), vote_average (d), vote_count (i)
 $insertSql = "
 INSERT INTO movies
     (tmdb_id, adult, backdrop_path, original_language, original_title, overview,
@@ -83,7 +87,7 @@ if (!$stmt) {
  * For a given year and an optional filter date (to retrieve movies with primary_release_date <= $filterDate),
  * this function processes up to 500 pages from TMDb and inserts each movie into the database.
  * It returns an array: [ $processed, $lastMovieDate ]
- * where $lastMovieDate is the release date (in YYYY-MM-DD format) of the last movie processed (the oldest in this segment),
+ * where $lastMovieDate is the release date (as returned by the API) of the last movie processed,
  * or null if no movies were found.
  */
 function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $baseQueryParams, $stmt) {
@@ -142,11 +146,13 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
         }
         
         foreach ($data['results'] as $movie) {
-            // Convert and store the full date (YYYY-MM-DD) from the API.
+            // For release_date, take the raw value from the API.
             if (!empty($movie['release_date'])) {
-                $lastMovieDate = date("Y-m-d", strtotime($movie['release_date']));
-                // **Output the exact release date before insertion:**
+                $lastMovieDate = $movie['release_date'];
+                // Output the exact release date before insertion.
                 echo "Inserting movie with release date: $lastMovieDate\n";
+            } else {
+                $lastMovieDate = null;
             }
             
             $tmdb_id           = $movie['id'];
@@ -157,15 +163,17 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
             $overview          = $movie['overview'] ?? null;
             $popularity        = isset($movie['popularity']) ? $movie['popularity'] : 0;
             $poster_path       = $movie['poster_path'] ?? null;
-            // Convert the release date to full format.
-            $release_date      = !empty($movie['release_date']) ? date("Y-m-d", strtotime($movie['release_date'])) : null;
+            // Take the release_date directly as a string.
+            $release_date      = !empty($movie['release_date']) ? $movie['release_date'] : null;
             $title             = $movie['title'] ?? null;
             $video             = !empty($movie['video']) ? 1 : 0;
             $vote_average      = isset($movie['vote_average']) ? $movie['vote_average'] : 0;
             $vote_count        = isset($movie['vote_count']) ? $movie['vote_count'] : 0;
             
+            // The bind_param format string is updated:
+            // "iissssdsisssi" => 9th parameter is now a string ("s") for release_date.
             if (!$stmt->bind_param(
-                "iissssdsissdi",
+                "iissssdsisssi",
                 $tmdb_id,
                 $adult,
                 $backdrop_path,

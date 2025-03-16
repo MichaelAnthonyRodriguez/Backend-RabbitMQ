@@ -2,7 +2,7 @@
 CREATE DATABASE IF NOT EXISTS testdb;
 USE testdb;
 
--- Create `users` table to store user registration details
+-- Create `users` table
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     first_name VARCHAR(50) NOT NULL,
@@ -10,11 +10,11 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(50) NOT NULL UNIQUE,
     email VARCHAR(100) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    trivia_highscore INT NOT NULL DEFAULT 0, -- added highscores
+    trivia_highscore INT NOT NULL DEFAULT 0,
     created_at BIGINT UNSIGNED NOT NULL DEFAULT (UNIX_TIMESTAMP())
 );
 
--- Create `sessions` table to track user sessions
+-- Create `sessions` table
 CREATE TABLE IF NOT EXISTS sessions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -24,7 +24,6 @@ CREATE TABLE IF NOT EXISTS sessions (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- Create `movies` table before referencing it in user_movies
 CREATE TABLE IF NOT EXISTS movies (
     id INT AUTO_INCREMENT PRIMARY KEY,
     tmdb_id INT NOT NULL UNIQUE,  -- The movie ID from TMDb
@@ -33,9 +32,9 @@ CREATE TABLE IF NOT EXISTS movies (
     original_language VARCHAR(10),
     original_title VARCHAR(255),
     overview TEXT,
-    popularity DECIMAL(7,2),      -- Adjust precision as needed
+    popularity DECIMAL(7,2),
     poster_path VARCHAR(255),
-    release_date DATE,
+    release_date VARCHAR(255),  -- Changed to string
     title VARCHAR(255),
     video BOOLEAN,
     vote_average DECIMAL(3,1),
@@ -43,7 +42,7 @@ CREATE TABLE IF NOT EXISTS movies (
     created_at BIGINT UNSIGNED NOT NULL DEFAULT (UNIX_TIMESTAMP())
 );
 
--- Create `user_movies` table to track user movie data
+-- Create `user_movies` table
 CREATE TABLE IF NOT EXISTS user_movies (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -53,10 +52,7 @@ CREATE TABLE IF NOT EXISTS user_movies (
     review TEXT,
     created_at BIGINT UNSIGNED NOT NULL DEFAULT (UNIX_TIMESTAMP()),
     
-    -- Ensure a user can't have duplicate entries for the same movie
     UNIQUE KEY (user_id, movie_id),
-    
-    -- Foreign keys to maintain referential integrity
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (movie_id) REFERENCES movies(id) ON DELETE CASCADE
 );
