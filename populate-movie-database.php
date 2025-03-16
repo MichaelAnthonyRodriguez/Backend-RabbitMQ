@@ -53,7 +53,7 @@ if (!$mydb->query($createTableSql)) {
 echo "Movies table created or already exists.\n";
 
 // STEP 2: Prepare the insertion query.
-// The bind_param() format string corresponds to:
+// Bind_param() format string: 
 // tmdb_id (i), adult (i), backdrop_path (s), original_language (s),
 // original_title (s), overview (s), popularity (d), poster_path (s),
 // release_date (s), title (s), video (i), vote_average (d), vote_count (i)
@@ -146,17 +146,17 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
         }
         
         foreach ($data['results'] as $movie) {
-            // Check if the API returned a release date.
             if (!empty($movie['release_date'])) {
                 $rawDate = trim($movie['release_date']);
-                // If the date is only 4 digits, assume it's just the year and append a default month and day.
-                if (preg_match('/^\d{4}$/', $rawDate)) {
+                // Debug: output the raw date value.
+                echo "Raw release date: '$rawDate'\n";
+                // If the raw date is only 4 digits, append "-01-01"
+                if (strlen($rawDate) == 4) {
                     $release_date = $rawDate . "-01-01";
                 } else {
                     $release_date = $rawDate;
                 }
                 $lastMovieDate = $release_date;
-                // Output the exact release date before insertion.
                 echo "Inserting movie with release date: $release_date\n";
             } else {
                 $release_date = null;
@@ -176,7 +176,7 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
             $vote_average      = isset($movie['vote_average']) ? $movie['vote_average'] : 0;
             $vote_count        = isset($movie['vote_count']) ? $movie['vote_count'] : 0;
             
-            // Updated bind_param format: "iissssdsisssi" 
+            // Updated bind_param format: "iissssdsisssi" (release_date as string)
             if (!$stmt->bind_param(
                 "iissssdsisssi",
                 $tmdb_id,
