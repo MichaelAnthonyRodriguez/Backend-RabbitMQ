@@ -53,7 +53,7 @@ if (!$mydb->query($createTableSql)) {
 echo "Movies table created or already exists.\n";
 
 // STEP 2: Prepare the insertion query.
-// Bind_param() format string: 
+// Bind_param() format string:
 // tmdb_id (i), adult (i), backdrop_path (s), original_language (s),
 // original_title (s), overview (s), popularity (d), poster_path (s),
 // release_date (s), title (s), video (i), vote_average (d), vote_count (i)
@@ -124,7 +124,7 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
     echo "Year $year with filter (" . ($filterDate ?? "none") . "): processing $pagesToProcess pages.\n";
     
     $lastMovieDate = null;
-    global $mydb; // For checking the inserted value
+    global $mydb; // For checking the database.
     
     for ($page = 1; $page <= $pagesToProcess; $page++) {
         $queryParams['page'] = $page;
@@ -157,8 +157,6 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
                 } else {
                     $release_date = $rawDate;
                 }
-                // Reformat date from "YYYY-MM-DD" to "YYYY/MM/DD"
-                $release_date = str_replace('-', '/', $release_date);
                 $lastMovieDate = $release_date;
                 echo "Inserting movie with release date: $release_date\n";
             } else {
@@ -179,7 +177,7 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
             $vote_average      = isset($movie['vote_average']) ? $movie['vote_average'] : 0;
             $vote_count        = isset($movie['vote_count']) ? $movie['vote_count'] : 0;
             
-            // Updated bind_param format: "iissssdsisssi" where release_date is a string.
+            // Bind parameters: "iissssdsisssi" (release_date as string)
             if (!$stmt->bind_param(
                 "iissssdsisssi",
                 $tmdb_id,
@@ -202,7 +200,7 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
             if (!$stmt->execute()) {
                 echo "Error inserting movie with tmdb_id $tmdb_id: " . $stmt->error . "\n";
             } else {
-                // Verify the stored release date in the database.
+                // Check the stored release_date
                 $checkQuery = "SELECT release_date FROM movies WHERE tmdb_id = ?";
                 $checkStmt = $mydb->prepare($checkQuery);
                 if (!$checkStmt) {
@@ -213,10 +211,24 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
                     $result = $checkStmt->get_result();
                     if ($result && $row = $result->fetch_assoc()) {
                         $storedDate = $row['release_date'];
-                        if ($storedDate === $release_date) {
-                            echo "Verified stored date: $storedDate for tmdb_id $tmdb_id\n";
+                        // If the stored date is only 4 digits, update it.
+                        if (strlen(trim($storedDate)) == 4) {
+                            echo "Stored date '$storedDate' for tmdb_id $tmdb_id is only a year. Updating to '$release_date'\n";
+                            $updateQuery = "UPDATE movies SET release_date = ? WHERE tmdb_id = ?";
+                            $updateStmt = $mydb->prepare($updateQuery);
+                            if ($updateStmt) {
+                                $updateStmt->bind_param("si", $release_date, $tmdb_id);
+                                if ($updateStmt->execute()) {
+                                    echo "Update successful for tmdb_id $tmdb_id\n";
+                                } else {
+                                    echo "Update failed for tmdb_id $tmdb_id: " . $updateStmt->error . "\n";
+                                }
+                                $updateStmt->close();
+                            } else {
+                                echo "Error preparing update for tmdb_id $tmdb_id: " . $mydb->error . "\n";
+                            }
                         } else {
-                            echo "Warning: Stored date '$storedDate' does not match expected '$release_date' for tmdb_id $tmdb_id\n";
+                            echo "Verified stored date: $storedDate for tmdb_id $tmdb_id\n";
                         }
                     } else {
                         echo "Error fetching stored date for tmdb_id $tmdb_id\n";
