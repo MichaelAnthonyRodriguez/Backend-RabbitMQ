@@ -27,7 +27,7 @@ $baseQueryParams = [
 ];
 
 // STEP 1: Create the movies table.
-// Note: release_date is stored as a string.
+// Now, release_date is stored as a DATE.
 $createTableSql = "
 CREATE TABLE IF NOT EXISTS movies (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -39,13 +39,13 @@ CREATE TABLE IF NOT EXISTS movies (
     overview TEXT,
     popularity DECIMAL(7,2),
     poster_path VARCHAR(255),
-    release_date VARCHAR(20),
+    release_date DATE,              -- Changed to DATE type
     title VARCHAR(255),
     video BOOLEAN,
     vote_average DECIMAL(3,1),
     vote_count INT,
     created_at BIGINT UNSIGNED NOT NULL DEFAULT (UNIX_TIMESTAMP())
-) ENGINE=InnoDB;
+);
 ";
 if (!$mydb->query($createTableSql)) {
     die("Failed to create table: " . $mydb->error . "\n");
@@ -53,7 +53,7 @@ if (!$mydb->query($createTableSql)) {
 echo "Movies table created or already exists.\n";
 
 // STEP 2: Prepare the insertion query.
-// The bind_param() format string corresponds to:
+// Bind_param() format string breakdown:
 // tmdb_id (i), adult (i), backdrop_path (s), original_language (s),
 // original_title (s), overview (s), popularity (d), poster_path (s),
 // release_date (s), title (s), video (i), vote_average (d), vote_count (i)
@@ -87,7 +87,7 @@ if (!$stmt) {
  * For a given year and an optional filter date (to retrieve movies with primary_release_date <= $filterDate),
  * this function processes up to 500 pages from TMDb and inserts each movie into the database.
  * It returns an array: [ $processed, $lastMovieDate ]
- * where $lastMovieDate is the release date of the last movie processed (the oldest in this segment),
+ * where $lastMovieDate is the release date (in YYYY-MM-DD format) of the last movie processed (the oldest in this segment),
  * or null if no movies were found.
  */
 function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $baseQueryParams, $stmt) {
