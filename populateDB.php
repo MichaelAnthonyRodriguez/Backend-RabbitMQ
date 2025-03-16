@@ -1,25 +1,29 @@
 <?php
-ini_set('max_execution_time', 300); // Increase PHP time limit
+require_once('mysqlconnect.php'); // Includes the database config
 
-require_once 'mysqlconnect.php';
+echo "initializing database using schema.sql...\n";
 
-$sqlFile = __DIR__ . '/schema.sql';
-$sqlContents = file_get_contents($sqlFile);
-if ($sqlContents === false) {
-    die("Error reading testdb.sql.\n");
+// Path to SQL schema file
+$schemaFile = __DIR__ . "/schema.sql";
+
+// Check if file exists
+if (!file_exists($schemaFile)) {
+    die("error: Schema file not found.\n");
 }
 
-// Possibly split the file into smaller queries if it's huge
-// e.g., explode(";", $sqlContents) and run them in a loop
+// Read schema file
+$schemaSQL = file_get_contents($schemaFile);
 
-if ($mydb->multi_query($sqlContents)) {
+// Execute schema queries
+if ($mydb->multi_query($schemaSQL)) {
     do {
         if ($result = $mydb->store_result()) {
             $result->free();
         }
     } while ($mydb->more_results() && $mydb->next_result());
-    echo "Database imported successfully.\n";
+    
+    echo "database initialized successfully from schema.sql.\n";
 } else {
-    die("Error importing database: " . $mydb->error . "\n");
+    die("error initializing database: " . $mydb->error . "\n");
 }
 ?>
