@@ -3,7 +3,7 @@ ini_set('max_execution_time', 300); // Increase PHP time limit
 
 require_once 'mysqlconnect.php';
 
-$sqlFile = __DIR__ . '/testdb.sql';
+$sqlFile = __DIR__ . '/schema.sql';
 $sqlContents = file_get_contents($sqlFile);
 if ($sqlContents === false) {
     die("Error reading testdb.sql.\n");
