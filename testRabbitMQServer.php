@@ -508,6 +508,23 @@ function doMovieFullDetails($tmdb_id) {
     return ["status" => "success", "movie" => $movie];
 }
 
+//user highscore getter function
+function doGetTriviaHighscore($user_id) {
+    global $mydb;
+    $query = "SELECT trivia_highscore FROM users WHERE id = ?";
+    $stmt = $mydb->prepare($query);
+    if(!$stmt) {
+        return ["status" => "error", "message" => "Database error: " . $mydb->error];
+    }
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result->fetch_assoc();
+    $stmt->close();
+    return ["status" => "success", "trivia_highscore" => $row['trivia_highscore']];
+}
+
+
 // ---------------------------
 // REQUEST PROCESSOR FUNCTION
 // ---------------------------
@@ -545,6 +562,8 @@ function requestProcessor($request) {
             return doGetTriviaMovie();
         case "update_trivia_highscore":
             return doUpdateTriviaHighscore($request['user_id'], $request['score']);
+        case "get_trivia_highscore":
+            return doGetTriviaHighscore($request['user_id']);
     }
     return ["returnCode" => '0', "message" => "Server received request and processed"];
 }
