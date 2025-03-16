@@ -3,7 +3,7 @@
 require_once('path.inc');
 require_once('get_host_info.inc');
 require_once('rabbitMQLib.inc');  // Includes the RabbitMQ Library
-require_once('mysqlconnect.php');  // Includes the database config
+require_once('mysqlconnect.php');  // Sets up the MySQLi connection ($mydb)
 require_once('populateDB.php');   // Populates the database with schema
 
 // ---------------------------
@@ -132,17 +132,17 @@ function doSearch($movie_title) {
     global $mydb;
     $query = "SELECT * FROM movies WHERE title LIKE CONCAT('%', ?, '%')";
     $stmt = $mydb->prepare($query);
-    if(!$stmt){
+    if (!$stmt) {
         return ["status" => "error", "message" => "Database error: " . $mydb->error];
     }
     $stmt->bind_param("s", $movie_title);
     $stmt->execute();
     $result = $stmt->get_result();
     $movies = [];
-    while($row = $result->fetch_assoc()){
+    while ($row = $result->fetch_assoc()) {
         $movies[] = $row;
     }
-    if(count($movies) == 0){
+    if (count($movies) == 0) {
         return ["status" => "error", "message" => "No movies found."];
     }
     return ["status" => "success", "movies" => $movies];
@@ -153,13 +153,13 @@ function doMovieDetails($tmdb_id) {
     global $mydb;
     $query = "SELECT tmdb_id, poster_path, title, overview, release_date, vote_average FROM movies WHERE tmdb_id = ?";
     $stmt = $mydb->prepare($query);
-    if(!$stmt){
+    if (!$stmt) {
         return ["status" => "error", "message" => "Database error: " . $mydb->error];
     }
     $stmt->bind_param("i", $tmdb_id);
     $stmt->execute();
     $result = $stmt->get_result();
-    if($result->num_rows == 0){
+    if ($result->num_rows == 0) {
         return ["status" => "error", "message" => "Movie not found."];
     }
     $movie = $result->fetch_assoc();
@@ -223,8 +223,7 @@ function doWatchlist($user_id) {
 }
 
 // ---------------------------
-// REVIEW UPDATE FUNCTIONS
-// These functions update one field at a time and update the timestamp.
+// REVIEW UPDATE FUNCTIONS (Update one field at a time and update timestamp)
 // ---------------------------
 
 // Update Watchlist only
@@ -287,7 +286,7 @@ function doUpdateWatchlist($user_id, $tmdb_id, $watchlist) {
     }
 }
 
-// Update Rating only (now updates the timestamp)
+// Update Rating only (updates timestamp)
 function doUpdateRating($user_id, $tmdb_id, $rating) {
     global $mydb;
     $query = "SELECT id FROM user_movies WHERE user_id = ? AND movie_id = (SELECT id FROM movies WHERE tmdb_id = ?)";
@@ -348,7 +347,7 @@ function doUpdateRating($user_id, $tmdb_id, $rating) {
     }
 }
 
-// Update Review only (now updates the timestamp)
+// Update Review only (updates timestamp)
 function doUpdateReview($user_id, $tmdb_id, $review) {
     global $mydb;
     $query = "SELECT id FROM user_movies WHERE user_id = ? AND movie_id = (SELECT id FROM movies WHERE tmdb_id = ?)";
@@ -410,6 +409,59 @@ function doUpdateReview($user_id, $tmdb_id, $review) {
 }
 
 // ---------------------------
+// TRIVIA FUNCTIONS
+// These functions are used by your trivia game.
+// ---------------------------
+function getRandomMovieTrivia() {
+    global $mydb;
+    $query = "SELECT tmdb_id, title, overview FROM movies ORDER BY RAND() LIMIT 1";
+    $result = $mydb->query($query);
+    if ($result && $result->num_rows > 0) {
+        return $result->fetch_assoc();
+    }
+    return null;
+}
+
+function getWrongTitlesTrivia($exclude_tmdb_id) {
+    global $mydb;
+    $query = "SELECT title FROM movies WHERE tmdb_id != " . intval($exclude_tmdb_id) . " ORDER BY RAND() LIMIT 3";
+    $result = $mydb->query($query);
+    $titles = [];
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $titles[] = $row['title'];
+        }
+    }
+    return $titles;
+}
+
+function doGetTriviaMovie() {
+    $movie = getRandomMovieTrivia();
+    if (!$movie) {
+        return ["status" => "error", "message" => "No movie found for trivia."];
+    }
+    $wrongTitles = getWrongTitlesTrivia($movie['tmdb_id']);
+    $options = array_merge([$movie['title']], $wrongTitles);
+    shuffle($options);
+    $movie['options'] = $options;
+    return ["status" => "success", "movie" => $movie];
+}
+
+function doUpdateTriviaHighscore($user_id, $score) {
+    global $mydb;
+    $query = "SELECT trivia_highscore FROM users WHERE id = " . intval($user_id);
+    $result = $mydb->query($query);
+    $row = $result ? $result->fetch_assoc() : null;
+    $prevHigh = $row ? (int)$row['trivia_highscore'] : 0;
+    if ($score > $prevHigh) {
+        $update = "UPDATE users SET trivia_highscore = " . intval($score) . " WHERE id = " . intval($user_id);
+        $mydb->query($update);
+        return ["status" => "success", "message" => "High score updated."];
+    }
+    return ["status" => "success", "message" => "High score remains unchanged."];
+}
+
+// ---------------------------
 // COMBINED MOVIE DETAILS & REVIEWS FUNCTION
 // ---------------------------
 function doMovieFullDetails($tmdb_id) {
@@ -462,7 +514,7 @@ function doMovieFullDetails($tmdb_id) {
 function requestProcessor($request) {
     echo "Processing request...\n";
     var_dump($request);
-    if(!isset($request['type'])) {
+    if (!isset($request['type'])) {
         return "ERROR: unsupported message type";
     }
     switch ($request['type']) {
@@ -489,6 +541,10 @@ function requestProcessor($request) {
             return doUpdateRating($request['user_id'], $request['tmdb_id'], $request['rating']);
         case "update_review":
             return doUpdateReview($request['user_id'], $request['tmdb_id'], $request['review']);
+        case "get_trivia_movie":
+            return doGetTriviaMovie();
+        case "update_trivia_highscore":
+            return doUpdateTriviaHighscore($request['user_id'], $request['score']);
     }
     return ["returnCode" => '0', "message" => "Server received request and processed"];
 }
