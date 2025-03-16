@@ -150,7 +150,8 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
         foreach ($data['results'] as $movie) {
             // Update lastMovieDate on every movie processed (it will end up as the last movie’s date).
             if (!empty($movie['release_date'])) {
-                $lastMovieDate = $movie['release_date'];
+                // Convert and store the full date (YYYY-MM-DD)
+                $lastMovieDate = date("Y-m-d", strtotime($movie['release_date']));
             }
             
             $tmdb_id           = $movie['id'];
@@ -161,7 +162,8 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
             $overview          = $movie['overview'] ?? null;
             $popularity        = isset($movie['popularity']) ? $movie['popularity'] : 0;
             $poster_path       = $movie['poster_path'] ?? null;
-            $release_date      = !empty($movie['release_date']) ? $movie['release_date'] : null;
+            // Convert the release date to the full date format if available.
+            $release_date      = !empty($movie['release_date']) ? date("Y-m-d", strtotime($movie['release_date'])) : null;
             $title             = $movie['title'] ?? null;
             $video             = !empty($movie['video']) ? 1 : 0;
             $vote_average      = isset($movie['vote_average']) ? $movie['vote_average'] : 0;
@@ -211,12 +213,9 @@ for ($year = 2031; $year >= 1900; $year--) {
             // No movies found in this segment; break out.
             break;
         }
-        // Check if we might have more movies by applying a filter.
-        // If the current segment returned 500 pages, assume more movies might be available.
-        // Update the segment filter to the last movie's release date.
         echo "Segment complete. Last movie release_date: $lastDate\n";
         
-        // Before starting the next segment, make an initial call with the new filter to see if there are more movies.
+        // Check if more movies exist for this year with the new filter.
         $checkParams = $baseQueryParams;
         $checkParams['primary_release_year'] = $year;
         $checkParams['primary_release_date.lte'] = $lastDate;
@@ -240,14 +239,12 @@ for ($year = 2031; $year >= 1900; $year--) {
             break;
         }
         
-        // Update the filter for the next segment.
-        // To avoid an infinite loop, check if the filter hasn't changed.
         if ($segmentFilter === $lastDate) {
             break;
         }
         $segmentFilter = $lastDate;
         echo "Found additional movies for year $year with filter $segmentFilter. Processing next segment...\n";
-    } // End while for segments of this year.
+    }
 }
 
 $stmt->close();
