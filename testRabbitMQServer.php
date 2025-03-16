@@ -6,9 +6,12 @@ require_once('rabbitMQLib.inc');  // Includes the RabbitMQ Library
 require_once('mysqlconnect.php');  // Includes the database config
 require_once('populateDB.php');   // Populates the database with schema
 
-// LOGIN FUNCTION
-function doLogin($username, $password)
-{
+// ---------------------------
+// USER FUNCTIONS
+// ---------------------------
+
+// Login function
+function doLogin($username, $password) {
     global $mydb;
     $query = "SELECT id, first_name, last_name, password_hash FROM users WHERE username = ?";
     $stmt = $mydb->prepare($query);
@@ -48,9 +51,8 @@ function doLogin($username, $password)
     ];
 }
 
-// SESSION VALIDATION FUNCTION
-function doValidate($sessionToken)
-{
+// Session validation function
+function doValidate($sessionToken) {
     global $mydb;
     $query = "SELECT user_id FROM sessions WHERE session_token = ? AND expires_at > NOW()";
     $stmt = $mydb->prepare($query);
@@ -66,9 +68,8 @@ function doValidate($sessionToken)
     return ["status" => "success", "message" => "Session is valid."];
 }
 
-// REGISTRATION FUNCTION
-function doRegister($first, $last, $username, $email, $password)
-{
+// Registration function
+function doRegister($first, $last, $username, $email, $password) {
     global $mydb;
     $checkQuery = "SELECT id FROM users WHERE username = ? OR email = ?";
     $stmt = $mydb->prepare($checkQuery);
@@ -95,9 +96,8 @@ function doRegister($first, $last, $username, $email, $password)
     }
 }
 
-// LOGOUT FUNCTION
-function doLogout($sessionToken)
-{
+// Logout function
+function doLogout($sessionToken) {
     global $mydb;
     $checkQuery = "SELECT id FROM sessions WHERE session_token = ?";
     $stmt = $mydb->prepare($checkQuery);
@@ -123,9 +123,12 @@ function doLogout($sessionToken)
     }
 }
 
-// MOVIE SEARCH FUNCTION
-function doSearch($movie_title)
-{
+// ---------------------------
+// MOVIE FUNCTIONS
+// ---------------------------
+
+// Movie search function
+function doSearch($movie_title) {
     global $mydb;
     $query = "SELECT * FROM movies WHERE title LIKE CONCAT('%', ?, '%')";
     $stmt = $mydb->prepare($query);
@@ -145,9 +148,27 @@ function doSearch($movie_title)
     return ["status" => "success", "movies" => $movies];
 }
 
-// TOP MOVIES FUNCTION
-function doTopMovies($year = null)
-{
+// Movie details function (basic details only)
+function doMovieDetails($tmdb_id) {
+    global $mydb;
+    $query = "SELECT tmdb_id, poster_path, title, overview, release_date, vote_average FROM movies WHERE tmdb_id = ?";
+    $stmt = $mydb->prepare($query);
+    if(!$stmt){
+        return ["status" => "error", "message" => "Database error: " . $mydb->error];
+    }
+    $stmt->bind_param("i", $tmdb_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    if($result->num_rows == 0){
+        return ["status" => "error", "message" => "Movie not found."];
+    }
+    $movie = $result->fetch_assoc();
+    $stmt->close();
+    return ["status" => "success", "movie" => $movie];
+}
+
+// Top movies function
+function doTopMovies($year = null) {
     global $mydb;
     if ($year === null) {
         $year = date("Y");
@@ -176,9 +197,8 @@ function doTopMovies($year = null)
     return ["status" => "success", "movies" => $movies];
 }
 
-// USER WATCHLIST FUNCTION
-function doWatchlist($user_id)
-{
+// User watchlist function
+function doWatchlist($user_id) {
     global $mydb;
     $query = "SELECT m.tmdb_id, m.poster_path, m.title, m.release_date, m.overview, m.vote_average 
               FROM movies m 
@@ -202,31 +222,152 @@ function doWatchlist($user_id)
     return ["status" => "success", "movies" => $movies];
 }
 
-// REVIEW ADDER FUNCTION
-function doAddReview($user_id, $tmdb_id, $watchlist, $rating, $review) {
+// ---------------------------
+// REVIEW UPDATE FUNCTIONS
+// These functions update only one field at a time.
+// ---------------------------
+
+// Update Watchlist only
+function doUpdateWatchlist($user_id, $tmdb_id, $watchlist) {
     global $mydb;
-    $query = "SELECT id FROM user_movies WHERE user_id = ? AND movie_id = (
-                SELECT id FROM movies WHERE tmdb_id = ?
-              )";
+    $query = "SELECT id FROM user_movies WHERE user_id = ? AND movie_id = (SELECT id FROM movies WHERE tmdb_id = ?)";
     $stmt = $mydb->prepare($query);
-    if(!$stmt){
+    if(!$stmt) {
         return ["status" => "error", "message" => "Database error: " . $mydb->error];
     }
     $stmt->bind_param("ii", $user_id, $tmdb_id);
     $stmt->execute();
     $stmt->store_result();
-    if($stmt->num_rows > 0){
+    if($stmt->num_rows > 0) {
         $stmt->bind_result($id);
         $stmt->fetch();
         $stmt->close();
-        $updateQuery = "UPDATE user_movies 
-                        SET watchlist = ?, rating = ?, review = ?, created_at = UNIX_TIMESTAMP()
-                        WHERE id = ?";
+        $updateQuery = "UPDATE user_movies SET watchlist = ? WHERE id = ?";
         $updateStmt = $mydb->prepare($updateQuery);
-        if(!$updateStmt){
+        if(!$updateStmt) {
             return ["status" => "error", "message" => "Database error: " . $mydb->error];
         }
-        $updateStmt->bind_param("isii", $watchlist, $rating, $review, $id);
+        $updateStmt->bind_param("ii", $watchlist, $id);
+        if($updateStmt->execute()){
+            $updateStmt->close();
+            return ["status" => "success", "message" => "Watchlist updated."];
+        } else {
+            $updateStmt->close();
+            return ["status" => "error", "message" => "Failed to update watchlist: " . $mydb->error];
+        }
+    } else {
+        $stmt->close();
+        $selectQuery = "SELECT id FROM movies WHERE tmdb_id = ?";
+        $selectStmt = $mydb->prepare($selectQuery);
+        if(!$selectStmt) {
+            return ["status" => "error", "message" => "Database error: " . $mydb->error];
+        }
+        $selectStmt->bind_param("i", $tmdb_id);
+        $selectStmt->execute();
+        $selectStmt->bind_result($movie_id);
+        if(!$selectStmt->fetch()){
+            $selectStmt->close();
+            return ["status" => "error", "message" => "Movie not found in local database."];
+        }
+        $selectStmt->close();
+        $insertQuery = "INSERT INTO user_movies (user_id, movie_id, watchlist, rating, review, created_at)
+                        VALUES (?, ?, ?, 0, '', UNIX_TIMESTAMP())";
+        $insertStmt = $mydb->prepare($insertQuery);
+        if(!$insertStmt) {
+            return ["status" => "error", "message" => "Database error: " . $mydb->error];
+        }
+        $insertStmt->bind_param("iii", $user_id, $movie_id, $watchlist);
+        if($insertStmt->execute()){
+            $insertStmt->close();
+            return ["status" => "success", "message" => "Watchlist added."];
+        } else {
+            $insertStmt->close();
+            return ["status" => "error", "message" => "Failed to add watchlist: " . $mydb->error];
+        }
+    }
+}
+
+// Update Rating only
+function doUpdateRating($user_id, $tmdb_id, $rating) {
+    global $mydb;
+    $query = "SELECT id FROM user_movies WHERE user_id = ? AND movie_id = (SELECT id FROM movies WHERE tmdb_id = ?)";
+    $stmt = $mydb->prepare($query);
+    if(!$stmt) {
+        return ["status" => "error", "message" => "Database error: " . $mydb->error];
+    }
+    $stmt->bind_param("ii", $user_id, $tmdb_id);
+    $stmt->execute();
+    $stmt->store_result();
+    if($stmt->num_rows > 0) {
+        $stmt->bind_result($id);
+        $stmt->fetch();
+        $stmt->close();
+        $updateQuery = "UPDATE user_movies SET rating = ? WHERE id = ?";
+        $updateStmt = $mydb->prepare($updateQuery);
+        if(!$updateStmt) {
+            return ["status" => "error", "message" => "Database error: " . $mydb->error];
+        }
+        $updateStmt->bind_param("ii", $rating, $id);
+        if($updateStmt->execute()){
+            $updateStmt->close();
+            return ["status" => "success", "message" => "Rating updated."];
+        } else {
+            $updateStmt->close();
+            return ["status" => "error", "message" => "Failed to update rating: " . $mydb->error];
+        }
+    } else {
+        $stmt->close();
+        $selectQuery = "SELECT id FROM movies WHERE tmdb_id = ?";
+        $selectStmt = $mydb->prepare($selectQuery);
+        if(!$selectStmt) {
+            return ["status" => "error", "message" => "Database error: " . $mydb->error];
+        }
+        $selectStmt->bind_param("i", $tmdb_id);
+        $selectStmt->execute();
+        $selectStmt->bind_result($movie_id);
+        if(!$selectStmt->fetch()){
+            $selectStmt->close();
+            return ["status" => "error", "message" => "Movie not found in local database."];
+        }
+        $selectStmt->close();
+        $insertQuery = "INSERT INTO user_movies (user_id, movie_id, watchlist, rating, review, created_at)
+                        VALUES (?, ?, 0, ?, '', UNIX_TIMESTAMP())";
+        $insertStmt = $mydb->prepare($insertQuery);
+        if(!$insertStmt) {
+            return ["status" => "error", "message" => "Database error: " . $mydb->error];
+        }
+        $insertStmt->bind_param("iii", $user_id, $movie_id, $rating);
+        if($insertStmt->execute()){
+            $insertStmt->close();
+            return ["status" => "success", "message" => "Rating added."];
+        } else {
+            $insertStmt->close();
+            return ["status" => "error", "message" => "Failed to add rating: " . $mydb->error];
+        }
+    }
+}
+
+// Update Review only
+function doUpdateReview($user_id, $tmdb_id, $review) {
+    global $mydb;
+    $query = "SELECT id FROM user_movies WHERE user_id = ? AND movie_id = (SELECT id FROM movies WHERE tmdb_id = ?)";
+    $stmt = $mydb->prepare($query);
+    if(!$stmt) {
+        return ["status" => "error", "message" => "Database error: " . $mydb->error];
+    }
+    $stmt->bind_param("ii", $user_id, $tmdb_id);
+    $stmt->execute();
+    $stmt->store_result();
+    if($stmt->num_rows > 0) {
+        $stmt->bind_result($id);
+        $stmt->fetch();
+        $stmt->close();
+        $updateQuery = "UPDATE user_movies SET review = ? WHERE id = ?";
+        $updateStmt = $mydb->prepare($updateQuery);
+        if(!$updateStmt) {
+            return ["status" => "error", "message" => "Database error: " . $mydb->error];
+        }
+        $updateStmt->bind_param("si", $review, $id);
         if($updateStmt->execute()){
             $updateStmt->close();
             return ["status" => "success", "message" => "Review updated."];
@@ -238,7 +379,7 @@ function doAddReview($user_id, $tmdb_id, $watchlist, $rating, $review) {
         $stmt->close();
         $selectQuery = "SELECT id FROM movies WHERE tmdb_id = ?";
         $selectStmt = $mydb->prepare($selectQuery);
-        if(!$selectStmt){
+        if(!$selectStmt) {
             return ["status" => "error", "message" => "Database error: " . $mydb->error];
         }
         $selectStmt->bind_param("i", $tmdb_id);
@@ -249,14 +390,13 @@ function doAddReview($user_id, $tmdb_id, $watchlist, $rating, $review) {
             return ["status" => "error", "message" => "Movie not found in local database."];
         }
         $selectStmt->close();
-        
         $insertQuery = "INSERT INTO user_movies (user_id, movie_id, watchlist, rating, review, created_at)
-                        VALUES (?, ?, ?, ?, ?, UNIX_TIMESTAMP())";
+                        VALUES (?, ?, 0, 0, ?, UNIX_TIMESTAMP())";
         $insertStmt = $mydb->prepare($insertQuery);
-        if(!$insertStmt){
+        if(!$insertStmt) {
             return ["status" => "error", "message" => "Database error: " . $mydb->error];
         }
-        $insertStmt->bind_param("iiiss", $user_id, $movie_id, $watchlist, $rating, $review);
+        $insertStmt->bind_param("iis", $user_id, $movie_id, $review);
         if($insertStmt->execute()){
             $insertStmt->close();
             return ["status" => "success", "message" => "Review added."];
@@ -270,7 +410,7 @@ function doAddReview($user_id, $tmdb_id, $watchlist, $rating, $review) {
 // COMBINED MOVIE DETAILS & REVIEWS FUNCTION
 function doMovieFullDetails($tmdb_id) {
     global $mydb;
-    // Get movie details
+    // Get movie details.
     $query = "SELECT tmdb_id, poster_path, title, overview, release_date, vote_average FROM movies WHERE tmdb_id = ?";
     $stmt = $mydb->prepare($query);
     if(!$stmt){
@@ -285,7 +425,7 @@ function doMovieFullDetails($tmdb_id) {
     $movie = $result->fetch_assoc();
     $stmt->close();
     
-    // Get reviews for this movie
+    // Get reviews for this movie.
     $query = "SELECT u.username, um.rating, um.review, FROM_UNIXTIME(um.created_at) as review_date
               FROM user_movies um
               JOIN users u ON um.user_id = u.id
@@ -313,15 +453,13 @@ function doMovieFullDetails($tmdb_id) {
 }
 
 // REQUEST PROCESSOR FUNCTION
-function requestProcessor($request)
-{
+function requestProcessor($request) {
     echo "Processing request...\n";
     var_dump($request);
     if(!isset($request['type'])) {
         return "ERROR: unsupported message type";
     }
-    switch ($request['type'])
-    {
+    switch ($request['type']) {
         case "login":
             return doLogin($request['user'], $request['password']);
         case "validate_session":
@@ -332,9 +470,6 @@ function requestProcessor($request)
             return doLogout($request['session_token']);
         case "search":
             return doSearch($request['movie_title']);
-        case "movie_details":
-            // Optionally you could remove this case if all details should be combined.
-            return doMovieFullDetails($request['tmdb_id']);
         case "full_movie_details":
             return doMovieFullDetails($request['tmdb_id']);
         case "top_movies":
@@ -342,11 +477,12 @@ function requestProcessor($request)
             return doTopMovies($year);
         case "watchlist":
             return doWatchlist($request['user_id']);
-        case "add_review":
-            return doAddReview($request['user_id'], $request['tmdb_id'], $request['watchlist'], $request['rating'], $request['review']);
-        case "get_reviews":
-            // Optionally remove this case if full details includes reviews.
-            return doMovieFullDetails($request['tmdb_id']);
+        case "update_watchlist":
+            return doUpdateWatchlist($request['user_id'], $request['tmdb_id'], $request['watchlist']);
+        case "update_rating":
+            return doUpdateRating($request['user_id'], $request['tmdb_id'], $request['rating']);
+        case "update_review":
+            return doUpdateReview($request['user_id'], $request['tmdb_id'], $request['review']);
     }
     return ["returnCode" => '0', "message" => "Server received request and processed"];
 }
