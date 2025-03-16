@@ -224,7 +224,7 @@ function doWatchlist($user_id) {
 
 // ---------------------------
 // REVIEW UPDATE FUNCTIONS
-// These functions update only one field at a time.
+// These functions update one field at a time and update the timestamp.
 // ---------------------------
 
 // Update Watchlist only
@@ -242,7 +242,7 @@ function doUpdateWatchlist($user_id, $tmdb_id, $watchlist) {
         $stmt->bind_result($id);
         $stmt->fetch();
         $stmt->close();
-        $updateQuery = "UPDATE user_movies SET watchlist = ? WHERE id = ?";
+        $updateQuery = "UPDATE user_movies SET watchlist = ?, created_at = UNIX_TIMESTAMP() WHERE id = ?";
         $updateStmt = $mydb->prepare($updateQuery);
         if(!$updateStmt) {
             return ["status" => "error", "message" => "Database error: " . $mydb->error];
@@ -287,7 +287,7 @@ function doUpdateWatchlist($user_id, $tmdb_id, $watchlist) {
     }
 }
 
-// Update Rating only
+// Update Rating only (now updates the timestamp)
 function doUpdateRating($user_id, $tmdb_id, $rating) {
     global $mydb;
     $query = "SELECT id FROM user_movies WHERE user_id = ? AND movie_id = (SELECT id FROM movies WHERE tmdb_id = ?)";
@@ -302,7 +302,8 @@ function doUpdateRating($user_id, $tmdb_id, $rating) {
         $stmt->bind_result($id);
         $stmt->fetch();
         $stmt->close();
-        $updateQuery = "UPDATE user_movies SET rating = ? WHERE id = ?";
+        // Update rating and timestamp.
+        $updateQuery = "UPDATE user_movies SET rating = ?, created_at = UNIX_TIMESTAMP() WHERE id = ?";
         $updateStmt = $mydb->prepare($updateQuery);
         if(!$updateStmt) {
             return ["status" => "error", "message" => "Database error: " . $mydb->error];
@@ -347,7 +348,7 @@ function doUpdateRating($user_id, $tmdb_id, $rating) {
     }
 }
 
-// Update Review only
+// Update Review only (now updates the timestamp)
 function doUpdateReview($user_id, $tmdb_id, $review) {
     global $mydb;
     $query = "SELECT id FROM user_movies WHERE user_id = ? AND movie_id = (SELECT id FROM movies WHERE tmdb_id = ?)";
@@ -362,7 +363,8 @@ function doUpdateReview($user_id, $tmdb_id, $review) {
         $stmt->bind_result($id);
         $stmt->fetch();
         $stmt->close();
-        $updateQuery = "UPDATE user_movies SET review = ? WHERE id = ?";
+        // Update review and timestamp.
+        $updateQuery = "UPDATE user_movies SET review = ?, created_at = UNIX_TIMESTAMP() WHERE id = ?";
         $updateStmt = $mydb->prepare($updateQuery);
         if(!$updateStmt) {
             return ["status" => "error", "message" => "Database error: " . $mydb->error];
@@ -407,7 +409,9 @@ function doUpdateReview($user_id, $tmdb_id, $review) {
     }
 }
 
+// ---------------------------
 // COMBINED MOVIE DETAILS & REVIEWS FUNCTION
+// ---------------------------
 function doMovieFullDetails($tmdb_id) {
     global $mydb;
     // Get movie details.
@@ -452,7 +456,9 @@ function doMovieFullDetails($tmdb_id) {
     return ["status" => "success", "movie" => $movie];
 }
 
+// ---------------------------
 // REQUEST PROCESSOR FUNCTION
+// ---------------------------
 function requestProcessor($request) {
     echo "Processing request...\n";
     var_dump($request);
