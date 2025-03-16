@@ -436,9 +436,19 @@ function getWrongTitlesTrivia($exclude_tmdb_id) {
 }
 
 function doGetTriviaMovie() {
-    $movie = getRandomMovieTrivia();
+    // Try up to 5 times to get a movie with a non-empty overview.
+    $maxAttempts = 5;
+    $attempt = 0;
+    do {
+        $movie = getRandomMovieTrivia();
+        $attempt++;
+    } while ($attempt < $maxAttempts && empty(trim($movie['overview'])));
+    
     if (!$movie) {
         return ["status" => "error", "message" => "No movie found for trivia."];
+    }
+    if (empty(trim($movie['overview']))) {
+        $movie['overview'] = "No overview available for this movie.";
     }
     $wrongTitles = getWrongTitlesTrivia($movie['tmdb_id']);
     $options = array_merge([$movie['title']], $wrongTitles);
@@ -449,9 +459,16 @@ function doGetTriviaMovie() {
 
 function doUpdateTriviaHighscore($user_id, $score) {
     global $mydb;
-    $query = "SELECT trivia_highscore FROM users WHERE id = " . intval($user_id);
-    $result = $mydb->query($query);
-    $row = $result ? $result->fetch_assoc() : null;
+    $query = "SELECT trivia_highscore FROM users WHERE id = ?";
+    $stmt = $mydb->prepare($query);
+    if (!$stmt) {
+        return ["status" => "error", "message" => "Database error: " . $mydb->error];
+    }
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result->fetch_assoc();
+    $stmt->close();
     $prevHigh = $row ? (int)$row['trivia_highscore'] : 0;
     if ($score > $prevHigh) {
         $update = "UPDATE users SET trivia_highscore = " . intval($score) . " WHERE id = " . intval($user_id);
@@ -507,23 +524,6 @@ function doMovieFullDetails($tmdb_id) {
     }
     return ["status" => "success", "movie" => $movie];
 }
-
-//user highscore getter function
-function doGetTriviaHighscore($user_id) {
-    global $mydb;
-    $query = "SELECT trivia_highscore FROM users WHERE id = ?";
-    $stmt = $mydb->prepare($query);
-    if(!$stmt) {
-        return ["status" => "error", "message" => "Database error: " . $mydb->error];
-    }
-    $stmt->bind_param("i", $user_id);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $row = $result->fetch_assoc();
-    $stmt->close();
-    return ["status" => "success", "trivia_highscore" => $row['trivia_highscore']];
-}
-
 
 // ---------------------------
 // REQUEST PROCESSOR FUNCTION
