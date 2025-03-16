@@ -53,7 +53,7 @@ if (!$mydb->query($createTableSql)) {
 echo "Movies table created or already exists.\n";
 
 // STEP 2: Prepare the insertion query.
-// Bind_param() format string:
+// Bind_param() format string: 
 // tmdb_id (i), adult (i), backdrop_path (s), original_language (s),
 // original_title (s), overview (s), popularity (d), poster_path (s),
 // release_date (s), title (s), video (i), vote_average (d), vote_count (i)
@@ -124,7 +124,7 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
     echo "Year $year with filter (" . ($filterDate ?? "none") . "): processing $pagesToProcess pages.\n";
     
     $lastMovieDate = null;
-    global $mydb; // Use global $mydb to check the database.
+    global $mydb; // For checking the inserted value
     
     for ($page = 1; $page <= $pagesToProcess; $page++) {
         $queryParams['page'] = $page;
@@ -157,6 +157,8 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
                 } else {
                     $release_date = $rawDate;
                 }
+                // Reformat date from "YYYY-MM-DD" to "YYYY/MM/DD"
+                $release_date = str_replace('-', '/', $release_date);
                 $lastMovieDate = $release_date;
                 echo "Inserting movie with release date: $release_date\n";
             } else {
@@ -177,7 +179,7 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
             $vote_average      = isset($movie['vote_average']) ? $movie['vote_average'] : 0;
             $vote_count        = isset($movie['vote_count']) ? $movie['vote_count'] : 0;
             
-            // Updated bind_param format: "iissssdsisssi" (release_date as string)
+            // Updated bind_param format: "iissssdsisssi" where release_date is a string.
             if (!$stmt->bind_param(
                 "iissssdsisssi",
                 $tmdb_id,
@@ -200,7 +202,7 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
             if (!$stmt->execute()) {
                 echo "Error inserting movie with tmdb_id $tmdb_id: " . $stmt->error . "\n";
             } else {
-                // Check the database to verify the stored release date.
+                // Verify the stored release date in the database.
                 $checkQuery = "SELECT release_date FROM movies WHERE tmdb_id = ?";
                 $checkStmt = $mydb->prepare($checkQuery);
                 if (!$checkStmt) {
@@ -228,7 +230,7 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
     return [true, $lastMovieDate];
 }
 
-// STEP 3: Loop over years descending starting from 2031.
+// Loop over years descending starting from 2031.
 // For each year, process segments until no more movies are found.
 for ($year = 2031; $year >= 1900; $year--) {
     echo "\n=== Processing movies for year: $year ===\n";
