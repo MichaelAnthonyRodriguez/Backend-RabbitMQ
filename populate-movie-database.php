@@ -124,6 +124,8 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
     echo "Year $year with filter (" . ($filterDate ?? "none") . "): processing $pagesToProcess pages.\n";
     
     $lastMovieDate = null;
+    global $mydb; // Use global $mydb to check the database.
+    
     for ($page = 1; $page <= $pagesToProcess; $page++) {
         $queryParams['page'] = $page;
         try {
@@ -149,7 +151,7 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
             if (!empty($movie['release_date'])) {
                 $rawDate = trim($movie['release_date']);
                 echo "Raw release date: '$rawDate' (length: " . strlen($rawDate) . ")\n";
-                // If the raw date is exactly 4 digits (only year), append "-01-01"
+                // If the raw date is exactly 4 digits, append "-01-01"
                 if (preg_match('/^\d{4}$/', $rawDate)) {
                     $release_date = $rawDate . "-01-01";
                 } else {
@@ -175,7 +177,7 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
             $vote_average      = isset($movie['vote_average']) ? $movie['vote_average'] : 0;
             $vote_count        = isset($movie['vote_count']) ? $movie['vote_count'] : 0;
             
-            // Bind parameters: "iissssdsisssi"
+            // Updated bind_param format: "iissssdsisssi" (release_date as string)
             if (!$stmt->bind_param(
                 "iissssdsisssi",
                 $tmdb_id,
@@ -197,6 +199,28 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
             }
             if (!$stmt->execute()) {
                 echo "Error inserting movie with tmdb_id $tmdb_id: " . $stmt->error . "\n";
+            } else {
+                // Check the database to verify the stored release date.
+                $checkQuery = "SELECT release_date FROM movies WHERE tmdb_id = ?";
+                $checkStmt = $mydb->prepare($checkQuery);
+                if (!$checkStmt) {
+                    echo "Error preparing check statement for tmdb_id $tmdb_id: " . $mydb->error . "\n";
+                } else {
+                    $checkStmt->bind_param("i", $tmdb_id);
+                    $checkStmt->execute();
+                    $result = $checkStmt->get_result();
+                    if ($result && $row = $result->fetch_assoc()) {
+                        $storedDate = $row['release_date'];
+                        if ($storedDate === $release_date) {
+                            echo "Verified stored date: $storedDate for tmdb_id $tmdb_id\n";
+                        } else {
+                            echo "Warning: Stored date '$storedDate' does not match expected '$release_date' for tmdb_id $tmdb_id\n";
+                        }
+                    } else {
+                        echo "Error fetching stored date for tmdb_id $tmdb_id\n";
+                    }
+                    $checkStmt->close();
+                }
             }
         }
     }
@@ -204,7 +228,7 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
     return [true, $lastMovieDate];
 }
 
-// Loop over years descending starting from 2031.
+// STEP 3: Loop over years descending starting from 2031.
 // For each year, process segments until no more movies are found.
 for ($year = 2031; $year >= 1900; $year--) {
     echo "\n=== Processing movies for year: $year ===\n";
