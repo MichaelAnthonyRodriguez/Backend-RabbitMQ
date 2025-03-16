@@ -24,24 +24,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- Create `user movies` table to track user movie data
-CREATE TABLE IF NOT EXISTS user_movies (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    movie_id INT NOT NULL,
-    watchlist BOOLEAN NOT NULL DEFAULT FALSE,
-    rating TINYINT,
-    review TEXT,
-    created_at BIGINT UNSIGNED NOT NULL DEFAULT (UNIX_TIMESTAMP()),
-
-    -- Ensure a user can't have duplicate entries for the same movie
-    UNIQUE KEY (user_id, movie_id),
-
-    -- Foreign keys to maintain referential integrity
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (movie_id) REFERENCES movies(id) ON DELETE CASCADE
-);
-
+-- Create `movies` table before referencing it in user_movies
 CREATE TABLE IF NOT EXISTS movies (
     id INT AUTO_INCREMENT PRIMARY KEY,
     tmdb_id INT NOT NULL UNIQUE,  -- The movie ID from TMDb
@@ -57,6 +40,23 @@ CREATE TABLE IF NOT EXISTS movies (
     video BOOLEAN,
     vote_average DECIMAL(3,1),
     vote_count INT,
-    
     created_at BIGINT UNSIGNED NOT NULL DEFAULT (UNIX_TIMESTAMP())
+);
+
+-- Create `user_movies` table to track user movie data
+CREATE TABLE IF NOT EXISTS user_movies (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    movie_id INT NOT NULL,
+    watchlist BOOLEAN NOT NULL DEFAULT FALSE,
+    rating TINYINT,
+    review TEXT,
+    created_at BIGINT UNSIGNED NOT NULL DEFAULT (UNIX_TIMESTAMP()),
+    
+    -- Ensure a user can't have duplicate entries for the same movie
+    UNIQUE KEY (user_id, movie_id),
+    
+    -- Foreign keys to maintain referential integrity
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (movie_id) REFERENCES movies(id) ON DELETE CASCADE
 );
