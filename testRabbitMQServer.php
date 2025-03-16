@@ -408,10 +408,7 @@ function doUpdateReview($user_id, $tmdb_id, $review) {
     }
 }
 
-// ---------------------------
-// TRIVIA FUNCTIONS
-// These functions are used by your trivia game.
-// ---------------------------
+//Trivia functions
 function getRandomMovieTrivia() {
     global $mydb;
     $query = "SELECT tmdb_id, title, overview FROM movies ORDER BY RAND() LIMIT 1";
@@ -478,9 +475,7 @@ function doUpdateTriviaHighscore($user_id, $score) {
     return ["status" => "success", "message" => "High score remains unchanged."];
 }
 
-// ---------------------------
-// COMBINED MOVIE DETAILS & REVIEWS FUNCTION
-// ---------------------------
+//Movie detail function
 function doMovieFullDetails($tmdb_id) {
     global $mydb;
     // Get movie details.
@@ -525,9 +520,67 @@ function doMovieFullDetails($tmdb_id) {
     return ["status" => "success", "movie" => $movie];
 }
 
-// ---------------------------
-// REQUEST PROCESSOR FUNCTION
-// ---------------------------
+//cron movie getter function
+function doUpdateMovieLatest($movie) {
+    global $mydb;
+    // Ensure we have the TMDb movie ID.
+    if (!isset($movie['id'])) {
+        return ["status" => "error", "message" => "Movie data does not contain an ID."];
+    }
+    $tmdb_id = $movie['id'];
+    $adult = isset($movie['adult']) ? ($movie['adult'] ? 1 : 0) : 0;
+    $backdrop_path = isset($movie['backdrop_path']) ? $movie['backdrop_path'] : "";
+    $original_language = isset($movie['original_language']) ? $movie['original_language'] : "";
+    $original_title = isset($movie['original_title']) ? $movie['original_title'] : "";
+    $overview = isset($movie['overview']) ? $movie['overview'] : "";
+    $popularity = isset($movie['popularity']) ? $movie['popularity'] : 0;
+    $poster_path = isset($movie['poster_path']) ? $movie['poster_path'] : "";
+    $release_date = isset($movie['release_date']) ? $movie['release_date'] : "";
+    $title = isset($movie['title']) ? $movie['title'] : "";
+    $video = isset($movie['video']) ? ($movie['video'] ? 1 : 0) : 0;
+    $vote_average = isset($movie['vote_average']) ? $movie['vote_average'] : 0;
+    $vote_count = isset($movie['vote_count']) ? $movie['vote_count'] : 0;
+    
+    $query = "INSERT INTO movies (tmdb_id, adult, backdrop_path, original_language, original_title, overview, popularity, poster_path, release_date, title, video, vote_average, vote_count)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON DUPLICATE KEY UPDATE
+                  overview = VALUES(overview),
+                  popularity = VALUES(popularity),
+                  poster_path = VALUES(poster_path),
+                  release_date = VALUES(release_date),
+                  title = VALUES(title),
+                  vote_average = VALUES(vote_average),
+                  vote_count = VALUES(vote_count)";
+    $stmt = $mydb->prepare($query);
+    if (!$stmt) {
+        return ["status" => "error", "message" => "Database error: " . $mydb->error];
+    }
+    $stmt->bind_param("iissssdsissdi", 
+        $tmdb_id,
+        $adult,
+        $backdrop_path,
+        $original_language,
+        $original_title,
+        $overview,
+        $popularity,
+        $poster_path,
+        $release_date,
+        $title,
+        $video,
+        $vote_average,
+        $vote_count
+    );
+    if ($stmt->execute()) {
+        $stmt->close();
+        return ["status" => "success", "message" => "Movie updated/inserted successfully."];
+    } else {
+        $stmt->close();
+        return ["status" => "error", "message" => "Failed to update movie: " . $mydb->error];
+    }
+}
+
+
+//request processor
 function requestProcessor($request) {
     echo "Processing request...\n";
     var_dump($request);
@@ -564,6 +617,8 @@ function requestProcessor($request) {
             return doUpdateTriviaHighscore($request['user_id'], $request['score']);
         case "get_trivia_highscore":
             return doGetTriviaHighscore($request['user_id']);
+        case "update_movie_latest":
+            return doUpdateMovieLatest($request['movie']);
     }
     return ["returnCode" => '0', "message" => "Server received request and processed"];
 }
