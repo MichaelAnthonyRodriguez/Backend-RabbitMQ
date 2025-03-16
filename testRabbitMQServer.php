@@ -580,6 +580,61 @@ function doUpdateMovieLatest($movie) {
 }
 
 
+//Watchlist checker function for emailer
+function doUpdateMovies() {
+    global $mydb;
+    $today = date("Y-m-d");
+    
+    // Retrieve movies that are watchlisted and have a release_date equal to today.
+    $query = "SELECT 
+                  m.id AS movie_id, 
+                  m.tmdb_id, 
+                  m.title, 
+                  m.release_date, 
+                  m.overview,
+                  u.email, 
+                  u.first_name, 
+                  u.last_name
+              FROM movies m
+              JOIN user_movies um ON m.id = um.movie_id
+              JOIN users u ON um.user_id = u.id
+              WHERE um.watchlist = 1 AND m.release_date = ?";
+              
+    $stmt = $mydb->prepare($query);
+    if (!$stmt) {
+        return ["status" => "error", "message" => "Database error: " . $mydb->error];
+    }
+    
+    $stmt->bind_param("s", $today);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    $movies = [];
+    while ($row = $result->fetch_assoc()) {
+        $movie_id = $row['movie_id'];
+        // Group the results by movie_id.
+        if (!isset($movies[$movie_id])) {
+            $movies[$movie_id] = [
+                "tmdb_id"      => $row['tmdb_id'],
+                "title"        => $row['title'],
+                "release_date" => $row['release_date'],
+                "overview"     => $row['overview'],
+                "recipients"   => []
+            ];
+        }
+        $movies[$movie_id]["recipients"][] = [
+            "email"      => $row['email'],
+            "first_name" => $row['first_name'],
+            "last_name"  => $row['last_name']
+        ];
+    }
+    
+    $stmt->close();
+    return ["status" => "success", "released_watchlisted" => array_values($movies)];
+}
+
+
+
 //request processor
 function requestProcessor($request) {
     echo "Processing request...\n";
