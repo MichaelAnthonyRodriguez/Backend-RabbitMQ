@@ -344,7 +344,6 @@ function doAddReview($user_id, $tmdb_id, $watchlist, $rating, $review) {
 //Review getter function
 function doGetReviews($tmdb_id) {
     global $mydb;
-    // Join user_movies with users so you can show the reviewer's name.
     $query = "SELECT u.username, um.rating, um.review, FROM_UNIXTIME(um.created_at) as review_date
               FROM user_movies um
               JOIN users u ON um.user_id = u.id
@@ -359,12 +358,13 @@ function doGetReviews($tmdb_id) {
     $stmt->execute();
     $result = $stmt->get_result();
     $reviews = [];
-    while ($row = $result->fetch_assoc()) {
+    while($row = $result->fetch_assoc()){
         $reviews[] = $row;
     }
     $stmt->close();
     if(count($reviews) == 0){
-        return ["status" => "error", "message" => "No reviews found for this movie."];
+        // Return a specific message indicating there are no reviews.
+        return ["status" => "success", "reviews" => [], "message" => "No reviews found for this movie."];
     }
     return ["status" => "success", "reviews" => $reviews];
 }
