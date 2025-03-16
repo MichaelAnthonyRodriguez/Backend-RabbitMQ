@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS movies (
     overview TEXT,
     popularity DECIMAL(7,2),
     poster_path VARCHAR(255),
-    release_date DATE,              -- Changed to DATE type
+    release_date DATE,
     title VARCHAR(255),
     video BOOLEAN,
     vote_average DECIMAL(3,1),
@@ -53,10 +53,6 @@ if (!$mydb->query($createTableSql)) {
 echo "Movies table created or already exists.\n";
 
 // STEP 2: Prepare the insertion query.
-// Bind_param() format string breakdown:
-// tmdb_id (i), adult (i), backdrop_path (s), original_language (s),
-// original_title (s), overview (s), popularity (d), poster_path (s),
-// release_date (s), title (s), video (i), vote_average (d), vote_count (i)
 $insertSql = "
 INSERT INTO movies
     (tmdb_id, adult, backdrop_path, original_language, original_title, overview,
@@ -145,13 +141,12 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
             continue;
         }
         
-        // Because results are sorted descending by primary_release_date,
-        // the last movie in the entire segment will have the oldest release date.
         foreach ($data['results'] as $movie) {
-            // Update lastMovieDate on every movie processed (it will end up as the last movie’s date).
+            // Convert and store the full date (YYYY-MM-DD) from the API.
             if (!empty($movie['release_date'])) {
-                // Convert and store the full date (YYYY-MM-DD)
                 $lastMovieDate = date("Y-m-d", strtotime($movie['release_date']));
+                // **Output the exact release date before insertion:**
+                echo "Inserting movie with release date: $lastMovieDate\n";
             }
             
             $tmdb_id           = $movie['id'];
@@ -162,7 +157,7 @@ function processSegment($year, $filterDate, $client, $baseUrl, $bearerToken, $ba
             $overview          = $movie['overview'] ?? null;
             $popularity        = isset($movie['popularity']) ? $movie['popularity'] : 0;
             $poster_path       = $movie['poster_path'] ?? null;
-            // Convert the release date to the full date format if available.
+            // Convert the release date to full format.
             $release_date      = !empty($movie['release_date']) ? date("Y-m-d", strtotime($movie['release_date'])) : null;
             $title             = $movie['title'] ?? null;
             $video             = !empty($movie['video']) ? 1 : 0;
@@ -210,12 +205,10 @@ for ($year = 2031; $year >= 1900; $year--) {
             break;
         }
         if ($lastDate === null) {
-            // No movies found in this segment; break out.
             break;
         }
         echo "Segment complete. Last movie release_date: $lastDate\n";
         
-        // Check if more movies exist for this year with the new filter.
         $checkParams = $baseQueryParams;
         $checkParams['primary_release_year'] = $year;
         $checkParams['primary_release_date.lte'] = $lastDate;
