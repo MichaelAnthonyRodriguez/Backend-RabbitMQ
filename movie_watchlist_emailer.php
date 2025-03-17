@@ -2,7 +2,7 @@
 <?php
 require_once 'vendor/autoload.php';
 require_once 'rabbitMQLib.inc';
-
+date_default_timezone_set("America/New_York");
 use Mailjet\Client;
 use Mailjet\Resources;
 
