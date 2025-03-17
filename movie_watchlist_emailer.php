@@ -88,7 +88,7 @@ function sendMailjetEmail($toEmail, $firstName, $lastName, $subject, $textPart, 
             ]
         ]
     ];
-
+    echo $body;
     $response = $mj->post(Resources::$Email, ['body' => $body]);
     if ($response->success()) {
         echo "Email sent to " . htmlspecialchars($toEmail) . "\n";
