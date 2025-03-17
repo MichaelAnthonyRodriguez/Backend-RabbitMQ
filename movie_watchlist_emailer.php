@@ -17,7 +17,7 @@ $body = [
     'Messages' => [
         [
             'From' => [
-                'Email' => "your-verified-email@example.com", // Must be a verified sender
+                'Email' => "mr94@njit.edu", // Must be a verified sender
                 'Name'  => "Your Sender Name"
             ],
             'To' => [
