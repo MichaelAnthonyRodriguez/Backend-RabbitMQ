@@ -22,7 +22,7 @@ $body = [
             ],
             'To' => [
                 [
-                    'Email' => "mr94@njit.edu",
+                    'Email' => "mikorod622@gmail.com",
                     'Name'  => "MR94 User"
                 ]
             ],
