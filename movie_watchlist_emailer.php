@@ -17,13 +17,13 @@ $body = [
     'Messages' => [
         [
             'From' => [
-                'Email' => "mr94@njit.edu", // Must be a verified sender
-                'Name'  => "Your Sender Name"
+                'Email' => "systemintergrationit490@gmail.com", // Must be a verified sender
+                'Name'  => "Cinemaniacs"
             ],
             'To' => [
                 [
                     'Email' => "mikorod622@gmail.com",
-                    'Name'  => "MR94 User"
+                    'Name'  => "name"
                 ]
             ],
             'Subject' => "Test Email from Mailjet",
