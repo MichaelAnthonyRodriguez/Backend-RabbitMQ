@@ -627,8 +627,9 @@ function doUpdateMovies() {
             "first_name" => $row['first_name'],
             "last_name"  => $row['last_name']
         ];
+        echo "checking movie";
     }
-    echo $movies;
+    
     $stmt->close();
     return ["status" => "success", "released_watchlisted" => array_values($movies)];
 }
