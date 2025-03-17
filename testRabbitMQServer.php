@@ -584,8 +584,8 @@ function doUpdateMovieLatest($movie) {
 function doUpdateMovies() {
     global $mydb;
     $today = date("Y-m-d");
+    echo "DEBUG: Today's date is: $today\n";
     
-    // Retrieve movies that are watchlisted and have a release_date equal to today.
     $query = "SELECT 
                   m.id AS movie_id, 
                   m.tmdb_id, 
@@ -599,9 +599,12 @@ function doUpdateMovies() {
               JOIN user_movies um ON m.id = um.movie_id
               JOIN users u ON um.user_id = u.id
               WHERE um.watchlist = 1 AND m.release_date = ?";
-              
+    
+    echo "DEBUG: Preparing query:\n$query\n";
+    
     $stmt = $mydb->prepare($query);
     if (!$stmt) {
+        echo "DEBUG: Prepare failed: " . $mydb->error . "\n";
         return ["status" => "error", "message" => "Database error: " . $mydb->error];
     }
     
@@ -609,9 +612,12 @@ function doUpdateMovies() {
     $stmt->execute();
     $result = $stmt->get_result();
     
+    echo "DEBUG: Number of rows returned: " . $result->num_rows . "\n";
+    
     $movies = [];
     while ($row = $result->fetch_assoc()) {
         $movie_id = $row['movie_id'];
+        echo "DEBUG: Found movie: " . $row['title'] . " (Movie ID: $movie_id)\n";
         // Group the results by movie_id.
         if (!isset($movies[$movie_id])) {
             $movies[$movie_id] = [
@@ -627,10 +633,12 @@ function doUpdateMovies() {
             "first_name" => $row['first_name'],
             "last_name"  => $row['last_name']
         ];
-        echo "checking movie";
     }
     
     $stmt->close();
+    echo "DEBUG: Final movies array:\n";
+    print_r(array_values($movies));
+    
     return ["status" => "success", "released_watchlisted" => array_values($movies)];
 }
 
