@@ -17,7 +17,7 @@ function qaListener() {
 function handleQaMessage($payload) {
     if ($payload['action'] === 'check_for_bundles') {
         // Ask deploy server for bundles to install
-        $client = new rabbitMQClient("deploymentServer", "deploymentServer");
+        $client = new rabbitMQClient("deploymentServer", "deploymentRabbitMQ.ini");
         $response = $client->send_request(['action' => 'get_new_bundles']);
 
         foreach ($response['bundles'] as $bundle) {
