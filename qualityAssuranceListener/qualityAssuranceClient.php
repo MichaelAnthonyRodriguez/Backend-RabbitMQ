@@ -9,7 +9,7 @@ date_default_timezone_set("America/New_York");
 
 //Functions
 function qaListener() {
-    $server = new rabbitMQServer("qa", "qa");
+    $server = new rabbitMQServer("qa", "deploymentRabbitMQ.ini");
     $server->process_requests("handleQaMessage");
 }
 
@@ -67,7 +67,4 @@ function handleQaMessage($payload) {
         }
     }
 }
-
-$client = new rabbitMQClient("deploymentRabbitMQ.ini", "testServer");
-    $response = $client->send_request($request);
 ?>
