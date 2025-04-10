@@ -1,4 +1,4 @@
-CREATE TABLE bundles (
+CREATE TABLE IF NOT EXISTS bundles (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,      -- e.g., "login"
     version INT NOT NULL,             -- e.g., 1

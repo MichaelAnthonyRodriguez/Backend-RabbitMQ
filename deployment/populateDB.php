@@ -22,7 +22,7 @@ if ($mydb->multi_query($schemaSQL)) {
         }
     } while ($mydb->more_results() && $mydb->next_result());
     
-    echo "database initialized successfully from schema.sql.\n";
+    echo "database initialized successfully from bundles.sql.\n";
 } else {
     die("error initializing database: " . $mydb->error . "\n");
 }
