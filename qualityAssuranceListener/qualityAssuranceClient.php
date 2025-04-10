@@ -3,8 +3,6 @@
 require_once('path.inc');
 require_once('get_host_info.inc');
 require_once('rabbitMQLib.inc');  // Includes the RabbitMQ Library
-require_once('mysqlconnect.php');  // Sets up the MySQLi connection ($mydb)
-require_once('populateDB.php');   // Populates the database with schema
 date_default_timezone_set("America/New_York");
 
 //Deployment php server for vm communication
