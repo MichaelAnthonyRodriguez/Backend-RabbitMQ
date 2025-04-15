@@ -62,7 +62,7 @@ function handleQaMessage($payload) {
     }
 }
 
-$server = new rabbitMQServer("deploymentRabbitMQ.ini", "qa");
+$server = new rabbitMQServer("deploymentRabbitMQ.ini", "frontend");
 $server->process_requests("handleQaMessage");
 
 ?>
