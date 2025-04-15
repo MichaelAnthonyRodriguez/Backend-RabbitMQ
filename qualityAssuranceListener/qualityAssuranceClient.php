@@ -11,7 +11,7 @@ date_default_timezone_set("America/New_York");
 function handleQaMessage($payload) {
     if ($payload['action'] === 'check_for_bundles') {
         // Ask deploy server for bundles to install
-        $client = new rabbitMQClient("deploymentServer", "deploymentRabbitMQ.ini");
+        $client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
         $response = $client->send_request(['action' => 'get_new_bundles']);
 
         foreach ($response['bundles'] as $bundle) {
@@ -62,7 +62,7 @@ function handleQaMessage($payload) {
     }
 }
 
-$server = new rabbitMQServer("qa", "deploymentRabbitMQ.ini");
+$server = new rabbitMQServer("deploymentRabbitMQ.ini", "qa");
 $server->process_requests("handleQaMessage");
 
 ?>

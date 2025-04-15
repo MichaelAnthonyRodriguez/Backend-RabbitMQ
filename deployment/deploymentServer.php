@@ -40,13 +40,14 @@ function handleDeploymentMessage($payload) {
         echo "[DEPLOYMENT] Bundle $name v$version marked as $status\n";
     }
 }
-$client = new rabbitMQClient($qaTarget, "deploymentRabbitMQ.ini");
-$client->publish([ 'action' => 'check_for_bundles' ]);
-echo "[DEPLOYMENT] Sent bundle check request to $qaTarget\n";
-
+function notifyQaOfNewBundle($qaTarget) {
+    $client = new rabbitMQClient("deploymentRabbitMQ.ini", $qaTarget);
+    $client->publish([ 'action' => 'check_for_bundles' ]);
+    echo "[DEPLOYMENT] Sent bundle check request to $qaTarget\n";
+}
 
 // === Deployment Server Listener ===
-$server = new rabbitMQServer("deploymentServer", "deploymentRabbitMQ.ini");
-$server->process_requests("handleDeploymentMessage");
+    $server = new rabbitMQServer("deploymentRabbitMQ.ini", "deploymentServer");
+    $server->process_requests("handleDeploymentMessage");
 
 ?>
