@@ -8,12 +8,6 @@ date_default_timezone_set("America/New_York");
 //Deployment php server for vm communication
 
 //Functions
-function qaListener() {
-    $server = new rabbitMQServer("qa", "deploymentRabbitMQ.ini");
-    $server->process_requests("handleQaMessage");
-}
-
-
 function handleQaMessage($payload) {
     if ($payload['action'] === 'check_for_bundles') {
         // Ask deploy server for bundles to install
@@ -67,4 +61,8 @@ function handleQaMessage($payload) {
         }
     }
 }
+
+$server = new rabbitMQServer("qa", "deploymentRabbitMQ.ini");
+$server->process_requests("handleQaMessage");
+
 ?>

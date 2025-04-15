@@ -9,19 +9,6 @@ date_default_timezone_set("America/New_York");
 
 // === Deployment PHP Server for VM Communication ===
 
-// Function: Tell a QA VM to check for new bundles
-function notifyQaOfNewBundle($qaTarget) {
-    $client = new rabbitMQClient($qaTarget, "deploymentRabbitMQ.ini");
-    $client->publish([ 'action' => 'check_for_bundles' ]);
-    echo "[DEPLOYMENT] Sent bundle check request to $qaTarget\n";
-}
-
-// === Deployment Server Listener ===
-function deploymentListener() {
-    $server = new rabbitMQServer("deploymentServer", "deploymentRabbitMQ.ini");
-    $server->process_requests("handleDeploymentMessage");
-}
-
 // === Handler for Incoming Messages ===
 function handleDeploymentMessage($payload) {
     global $mydb;
@@ -53,4 +40,13 @@ function handleDeploymentMessage($payload) {
         echo "[DEPLOYMENT] Bundle $name v$version marked as $status\n";
     }
 }
+$client = new rabbitMQClient($qaTarget, "deploymentRabbitMQ.ini");
+$client->publish([ 'action' => 'check_for_bundles' ]);
+echo "[DEPLOYMENT] Sent bundle check request to $qaTarget\n";
+
+
+// === Deployment Server Listener ===
+$server = new rabbitMQServer("deploymentServer", "deploymentRabbitMQ.ini");
+$server->process_requests("handleDeploymentMessage");
+
 ?>
