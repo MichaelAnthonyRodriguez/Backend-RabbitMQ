@@ -61,54 +61,47 @@ function createBundleTarball($type, $bundleName) {
         return;
     }
 
-    $baseDir = "/deploy/bundles/$type/$bundleName";
-    $iniPath = "$baseDir/bundle.ini";
+    $sourceDirMap = [
+        'frontend' => '/var/www/sample',
+        'backend'  => '/home/RabbitMQ/serverBackend',
+        'dmz'      => '/home/RabbitMQ/dmz'
+    ];
 
-    if (!file_exists($iniPath)) {
-        echo "Missing bundle.ini at $iniPath\n";
+    $sourceDir = $sourceDirMap[$type];
+
+    if (!is_dir($sourceDir)) {
+        echo "Source directory does not exist: $sourceDir\n";
         return;
     }
 
-    // 1. Request latest version (any status) from deployment
     $client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
-    $latest = $client->send_request([
+
+    // Get latest version of the bundle
+    $response = $client->send_request([
         'action' => 'get_latest_bundle_any_status',
         'name' => $bundleName
     ]);
-    $latestVersion = isset($latest['version']) ? (int)$latest['version'] : 0;
+
+    $latestVersion = isset($response['version']) ? (int)$response['version'] : 0;
     $nextVersion = $latestVersion + 1;
 
-    echo "[Zipper] Creating bundle '$bundleName' version $nextVersion\n";
+    echo "Creating bundle '$bundleName' version $nextVersion\n";
 
-    // 2. Parse bundle.ini and collect files
-    $ini = parse_ini_file($iniPath, true);
-    $files = $ini['files']['copy'] ?? [];
-    if (!is_array($files)) $files = [$files];
-
-    $tempDir = "/tmp/bundle_{$type}_{$bundleName}";
+    // Create tarball
     $bundleFilename = "{$bundleName}_v{$nextVersion}.tgz";
     $bundlePath = "/tmp/$bundleFilename";
 
-    shell_exec("rm -rf $tempDir && mkdir -p $tempDir");
-    shell_exec("cp $iniPath $tempDir/");
+    shell_exec("tar -czf $bundlePath -C $sourceDir .");
 
-    foreach ($files as $file) {
-        $src = "$baseDir/$file";
-        if (!file_exists($src)) {
-            echo "Skipping missing file: $src\n";
-            continue;
-        }
-        shell_exec("cp $src $tempDir/");
+    if (!file_exists($bundlePath)) {
+        echo "Failed to create tarball.\n";
+        return;
     }
 
-    // 3. Create tarball
-    shell_exec("tar -czf $bundlePath -C $tempDir .");
     $size = filesize($bundlePath);
 
-    echo "Bundle created: $bundleFilename (" . number_format($size) . " bytes)\n";
-
-    // 4. Send metadata to deployment server
-    $response = $client->send_request([
+    // Send bundle metadata to deployment server
+    $registration = $client->send_request([
         'action' => 'register_bundle',
         'name' => $bundleName,
         'version' => $nextVersion,
@@ -117,14 +110,13 @@ function createBundleTarball($type, $bundleName) {
         'filename' => $bundleFilename
     ]);
 
-    echo "[DEPLOYMENT] DB registration response:\n";
-    print_r($response);
+    print_r($registration);
 
-    // 5. SCP tarball to deployment server's bundle archive
-    $deployHost = "deployment@100.105.162.20"; // or whatever your deploy host is
+    // SCP tarball to deployment server
+    $deployHost = "deployment@100.105.162.20";
     $deployDest = "/deploy/archive/$bundleFilename";
 
-    echo "[SCP] Sending bundle to deployment server...\n";
+    echo "Sending bundle to deployment server...\n";
     $scpResult = shell_exec("scp $bundlePath $deployHost:$deployDest 2>&1");
 
     if (str_contains($scpResult, "No such file") || str_contains($scpResult, "Permission denied")) {
@@ -134,8 +126,9 @@ function createBundleTarball($type, $bundleName) {
     }
 
     // Cleanup
-    shell_exec("rm -rf $tempDir $bundlePath");
+    shell_exec("rm -f $bundlePath");
 }
+
 
 
 function requestLatestAnyStatusBundle($bundleName, $target = "deploymentServer") {
