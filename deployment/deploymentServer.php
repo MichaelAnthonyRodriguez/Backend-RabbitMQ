@@ -46,8 +46,64 @@ function notifyQaOfNewBundle($qaTarget) {
     echo "[DEPLOYMENT] Sent bundle check request to $qaTarget\n";
 }
 
+//gets latest passed bundle
+function getLatestPassedBundle($name) {
+    global $mydb;
+
+    $stmt = $mydb->prepare("
+        SELECT name, version, size, created_at
+        FROM bundles
+        WHERE name = ? AND status = 'passed'
+        ORDER BY version DESC
+        LIMIT 1
+    ");
+    $stmt->bind_param("s", $name);
+    $stmt->execute();
+
+    $result = $stmt->get_result();
+    $bundle = $result->fetch_assoc();
+
+    if ($bundle) {
+        echo "[DEPLOYMENT] Latest passed bundle for '{$name}': v{$bundle['version']}\n";
+        return $bundle;
+    } else {
+        echo "[DEPLOYMENT] No passed bundles found for '{$name}'\n";
+        return null;
+    }
+}
+
+//request processor
+function requestProcessor($request) {
+    echo "[DEPLOYMENT] Processing request...\n";
+    var_dump($request);
+
+    if (!isset($request['action'])) {
+        return "ERROR: unsupported or missing 'action'";
+    }
+
+    switch ($request['action']) {
+        case "get_new_bundles":
+            return handleDeploymentMessage($request);
+
+        case "bundle_result":
+            handleDeploymentMessage($request);
+            return ["status" => "acknowledged"];
+
+        case "get_latest_passed_bundle":
+            if (!isset($request['name'])) {
+                return ["status" => "error", "message" => "Missing bundle name"];
+            }
+            $bundle = getLatestPassedBundle($request['name']);
+            return $bundle ? $bundle : ["status" => "not_found"];
+
+        default:
+            return ["status" => "error", "message" => "Unsupported action: " . $request['action']];
+    }
+}
+
+
 // === Deployment Server Listener ===
     $server = new rabbitMQServer("deploymentRabbitMQ.ini", "deploymentServer");
-    $server->process_requests("handleDeploymentMessage");
-
+    echo "deploymentServer BEGIN" . PHP_EOL;
+    $server->process_requests("requestProcessor");
 ?>
