@@ -9,6 +9,33 @@ date_default_timezone_set("America/New_York");
 
 // === Deployment PHP Server for VM Communication ===
 
+//latest bundle function
+function getLatestAnyStatusBundle($name) {
+    global $mydb;
+
+    $stmt = $mydb->prepare("
+        SELECT name, version, status, size, created_at
+        FROM bundles
+        WHERE name = ?
+        ORDER BY version DESC
+        LIMIT 1
+    ");
+    $stmt->bind_param("s", $name);
+    $stmt->execute();
+
+    $result = $stmt->get_result();
+    $bundle = $result->fetch_assoc();
+
+    if ($bundle) {
+        echo "[DEPLOYMENT] Latest bundle for '{$name}': v{$bundle['version']} [{$bundle['status']}]\n";
+        return $bundle;
+    } else {
+        echo "[DEPLOYMENT] No bundles found for '{$name}'\n";
+        return null;
+    }
+}
+
+
 // === Handler for Incoming Messages ===
 function handleDeploymentMessage($payload) {
     global $mydb;
@@ -71,6 +98,18 @@ function getLatestPassedBundle($name) {
         return null;
     }
 }
+//adds new bundle to database
+function registerNewBundleFromDev($payload) {
+    global $mydb;
+
+    $stmt = $mydb->prepare("INSERT INTO bundles (name, version, status, size) VALUES (?, ?, ?, ?)");
+    $stmt->bind_param("sisi", $payload['name'], $payload['version'], $payload['status'], $payload['size']);
+    $stmt->execute();
+
+    echo "[DEPLOYMENT] Bundle '{$payload['name']}' v{$payload['version']} registered to DB.\n";
+    return ["status" => "ok", "message" => "bundle registered"];
+}
+
 
 //request processor
 function requestProcessor($request) {
@@ -82,6 +121,13 @@ function requestProcessor($request) {
     }
 
     switch ($request['action']) {
+        case "get_latest_bundle_any_status":
+            if (!isset($request['name'])) {
+                return ["status" => "error", "message" => "Missing bundle name"];
+            }
+            $bundle = getLatestAnyStatusBundle($request['name']);
+            return $bundle ? $bundle : ["status" => "not_found"];
+
         case "get_new_bundles":
             return handleDeploymentMessage($request);
 
@@ -95,7 +141,9 @@ function requestProcessor($request) {
             }
             $bundle = getLatestPassedBundle($request['name']);
             return $bundle ? $bundle : ["status" => "not_found"];
-
+        case "register_bundle":
+            return registerNewBundleFromDev($request);
+        
         default:
             return ["status" => "error", "message" => "Unsupported action: " . $request['action']];
     }
