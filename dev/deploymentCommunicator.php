@@ -114,7 +114,7 @@ function createBundleTarball($type, $bundleName) {
 
     // SCP tarball to deployment server
     $deployHost = "deployment@100.105.162.20";
-    $deployDest = "/bundles/$bundleFilename";
+    $deployDest = "/home/bundles/$bundleFilename";
 
     echo "Sending bundle to deployment server...\n";
     $scpResult = shell_exec("scp $bundlePath $deployHost:$deployDest 2>&1");
