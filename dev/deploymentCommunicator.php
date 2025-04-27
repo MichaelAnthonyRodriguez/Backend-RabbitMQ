@@ -100,7 +100,7 @@ function registerBundleMetadata($bundleName, $version, $size) {
     $client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
 
     try {
-        $response = $client->publish([
+        $response = $client->send_request([
             'action' => 'register_bundle',
             'name' => $bundleName,
             'version' => $version,
