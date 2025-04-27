@@ -55,13 +55,14 @@ function requestLatestPassedBundle($bundleName, $target = "deploymentServer") {
 
 //Create bundle zip
 function createBundleTarball($type, $bundleName) {
-    // Always show errors
     error_reporting(E_ALL);
     ini_set('display_errors', 1);
 
+    echo "[INFO] Starting createBundleTarball()\n";
+
     $validTypes = ['frontend', 'backend', 'dmz'];
     if (!in_array($type, $validTypes)) {
-        echo "Invalid type: $type (must be frontend, backend, or dmz)\n";
+        echo "[ERROR] Invalid type: $type (must be frontend, backend, or dmz)\n";
         return;
     }
 
@@ -72,60 +73,59 @@ function createBundleTarball($type, $bundleName) {
     ];
 
     $sourceDir = $sourceDirMap[$type];
+    echo "[INFO] Source directory resolved: $sourceDir\n";
 
     if (!is_dir($sourceDir)) {
-        echo "Source directory does not exist: $sourceDir\n";
+        echo "[ERROR] Source directory does not exist: $sourceDir\n";
         return;
     }
 
-    // Check that the directory is not empty
     $files = scandir($sourceDir);
     if (!$files || count(array_diff($files, ['.', '..'])) === 0) {
-        echo "Source directory $sourceDir is empty. Cannot create bundle.\n";
+        echo "[ERROR] Source directory $sourceDir is empty. Cannot create bundle.\n";
         return;
     }
 
+    echo "[INFO] Connecting to deployment server...\n";
     $client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
 
-    // Request latest bundle version
-    echo "Requesting latest bundle info from deployment server...\n";
+    echo "[INFO] Requesting latest bundle version...\n";
     $response = $client->send_request([
         'action' => 'get_latest_bundle_any_status',
         'name' => $bundleName
     ]);
 
-    echo "Deployment server response:\n";
+    echo "[INFO] Deployment server response:\n";
     print_r($response);
 
     if (!is_array($response) || empty($response) || !isset($response['version'])) {
-        echo "No existing bundle found. Starting at version 1.\n";
+        echo "[INFO] No existing bundle found. Starting at version 1.\n";
         $nextVersion = 1;
     } else {
         $latestVersion = (int)$response['version'];
-        echo "Latest version found: $latestVersion\n";
+        echo "[INFO] Latest version found: $latestVersion\n";
         $nextVersion = $latestVersion + 1;
     }
 
-    echo "Creating bundle '$bundleName' version $nextVersion\n";
+    echo "[INFO] Creating tarball for version $nextVersion...\n";
 
-    // Create tarball
     $bundleFilename = "{$bundleName}_v{$nextVersion}.tgz";
     $bundlePath = "/tmp/$bundleFilename";
 
     $tarCommand = "tar -czf $bundlePath -C $sourceDir . 2>&1";
-    echo "Running tar command: $tarCommand\n";
+    echo "[INFO] Running tar command: $tarCommand\n";
     $tarResult = shell_exec($tarCommand);
-    echo "Tar Output:\n" . $tarResult . "\n";
+    echo "[INFO] Tar output:\n$tarResult\n";
 
     if (!file_exists($bundlePath)) {
-        echo "Failed to create tarball.\n";
+        echo "[ERROR] Failed to create tarball.\n";
         return;
     }
 
     $size = filesize($bundlePath);
+    echo "[INFO] Tarball created successfully. Size: $size bytes\n";
 
-    // Send bundle metadata to deployment server
-    echo "Registering new bundle version $nextVersion with deployment server...\n";
+    echo "[INFO] Registering bundle with deployment server...\n";
     $registration = $client->send_request([
         'action' => 'register_bundle',
         'name' => $bundleName,
@@ -137,24 +137,26 @@ function createBundleTarball($type, $bundleName) {
 
     print_r($registration);
 
-    // SCP tarball to deployment server
     $deployHost = "michael-anthony-rodriguez@100.105.162.20";
     $deployDest = "/home/michael-anthony-rodriguez/bundles/$bundleFilename";
 
-    echo "Sending bundle to deployment server...\n";
+    echo "[INFO] Sending bundle to deployment server...\n";
     $scpCommand = "scp $bundlePath $deployHost:$deployDest 2>&1";
     $scpResult = shell_exec($scpCommand);
-    echo "SCP Output:\n" . $scpResult . "\n";
+    echo "[INFO] SCP output:\n$scpResult\n";
 
     if (strpos($scpResult, "No such file") !== false || strpos($scpResult, "Permission denied") !== false) {
-        echo "SCP failed.\n";
+        echo "[ERROR] SCP failed.\n";
     } else {
-        echo "Bundle successfully sent to deployment server.\n";
+        echo "[INFO] SCP successful.\n";
     }
 
-    // Cleanup
+    echo "[INFO] Cleaning up temp bundle file...\n";
     shell_exec("rm -f $bundlePath");
+
+    echo "[INFO] Finished createBundleTarball()\n";
 }
+
 
 
 

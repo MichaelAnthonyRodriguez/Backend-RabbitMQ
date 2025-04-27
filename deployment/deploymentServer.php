@@ -2,156 +2,98 @@
 <?php
 require_once('path.inc');
 require_once('get_host_info.inc');
-require_once('rabbitMQLib.inc');     // RabbitMQ class
-require_once('mysqlconnect.php');    // Shared MySQLi connection: $mydb
-require_once('populateDB.php');      // Bundle schema setup if needed
+require_once('rabbitMQLib.inc');
+require_once('mysqlconnect.php');
+require_once('populateDB.php');
+
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 date_default_timezone_set("America/New_York");
-
-// === Deployment PHP Server for VM Communication ===
-
-//latest bundle function
-function getLatestAnyStatusBundle($name) {
-    global $mydb;
-
-    $stmt = $mydb->prepare("
-        SELECT name, version, status, size, created_at
-        FROM bundles
-        WHERE name = ?
-        ORDER BY version DESC
-        LIMIT 1
-    ");
-    $stmt->bind_param("s", $name);
-    $stmt->execute();
-
-    $result = $stmt->get_result();
-    $bundle = $result->fetch_assoc();
-
-    if ($bundle) {
-        echo "[DEPLOYMENT] Latest bundle for '{$name}': v{$bundle['version']} [{$bundle['status']}]\n";
-        return $bundle;
-    } else {
-        echo "[DEPLOYMENT] No bundles found for '{$name}'\n";
-        return null;
-    }
-}
-
 
 // === Handler for Incoming Messages ===
 function handleDeploymentMessage($payload) {
     global $mydb;
 
-    if ($payload['action'] === 'get_new_bundles') {
-        $env = $payload['env']; // Optional filter for future use
+    echo "[SERVER] Received message:\n";
+    print_r($payload);
 
-        $stmt = $mydb->prepare("SELECT name, version FROM bundles WHERE status = 'new'");
-        $stmt->execute();
-        $result = $stmt->get_result();
-
-        $bundles = [];
-        while ($row = $result->fetch_assoc()) {
-            $bundles[] = $row;
-        }
-
-        echo "[DEPLOYMENT] Sent list of new bundles to requester.\n";
-        return ['bundles' => $bundles];
-
-    } elseif ($payload['action'] === 'bundle_result') {
-        $name = $payload['name'];
-        $version = $payload['version'];
-        $status = $payload['status'];  // 'passed' or 'failed'
-
-        $stmt = $mydb->prepare("UPDATE bundles SET status = ? WHERE name = ? AND version = ?");
-        $stmt->bind_param("ssi", $status, $name, $version);
-        $stmt->execute();
-
-        echo "[DEPLOYMENT] Bundle $name v$version marked as $status\n";
-    }
-}
-function notifyQaOfNewBundle($qaTarget) {
-    $client = new rabbitMQClient("deploymentRabbitMQ.ini", $qaTarget);
-    $client->publish([ 'action' => 'check_for_bundles' ]);
-    echo "[DEPLOYMENT] Sent bundle check request to $qaTarget\n";
-}
-
-//gets latest passed bundle
-function getLatestPassedBundle($name) {
-    global $mydb;
-
-    $stmt = $mydb->prepare("
-        SELECT name, version, size, created_at
-        FROM bundles
-        WHERE name = ? AND status = 'passed'
-        ORDER BY version DESC
-        LIMIT 1
-    ");
-    $stmt->bind_param("s", $name);
-    $stmt->execute();
-
-    $result = $stmt->get_result();
-    $bundle = $result->fetch_assoc();
-
-    if ($bundle) {
-        echo "[DEPLOYMENT] Latest passed bundle for '{$name}': v{$bundle['version']}\n";
-        return $bundle;
-    } else {
-        echo "[DEPLOYMENT] No passed bundles found for '{$name}'\n";
-        return null;
-    }
-}
-//adds new bundle to database
-function registerNewBundleFromDev($payload) {
-    global $mydb;
-
-    $stmt = $mydb->prepare("INSERT INTO bundles (name, version, status, size) VALUES (?, ?, ?, ?)");
-    $stmt->bind_param("sisi", $payload['name'], $payload['version'], $payload['status'], $payload['size']);
-    $stmt->execute();
-
-    echo "[DEPLOYMENT] Bundle '{$payload['name']}' v{$payload['version']} registered to DB.\n";
-    return ["status" => "ok", "message" => "bundle registered"];
-}
-
-
-//request processor
-function requestProcessor($request) {
-    echo "[DEPLOYMENT] Processing request...\n";
-    var_dump($request);
-
-    if (!isset($request['action'])) {
-        return "ERROR: unsupported or missing 'action'";
+    if (!isset($payload['action'])) {
+        echo "[SERVER] Error: No action specified\n";
+        return ["status" => "error", "message" => "No action provided"];
     }
 
-    switch ($request['action']) {
-        case "get_latest_bundle_any_status":
-            if (!isset($request['name'])) {
-                return ["status" => "error", "message" => "Missing bundle name"];
+    switch ($payload['action']) {
+        case 'get_new_bundles':
+            echo "[SERVER] Action: get_new_bundles\n";
+            $env = $payload['env'] ?? 'qa';
+
+            $stmt = $mydb->prepare("SELECT name, version FROM bundles WHERE status = 'new'");
+            $stmt->execute();
+            $result = $stmt->get_result();
+
+            $bundles = [];
+            while ($row = $result->fetch_assoc()) {
+                $bundles[] = $row;
             }
-            $bundle = getLatestAnyStatusBundle($request['name']);
-            return $bundle ? $bundle : ["status" => "not_found"];
 
-        case "get_new_bundles":
-            return handleDeploymentMessage($request);
+            echo "[SERVER] Found bundles:\n";
+            print_r($bundles);
 
-        case "bundle_result":
-            handleDeploymentMessage($request);
-            return ["status" => "acknowledged"];
+            return ['bundles' => $bundles];
 
-        case "get_latest_passed_bundle":
-            if (!isset($request['name'])) {
-                return ["status" => "error", "message" => "Missing bundle name"];
+        case 'bundle_result':
+            echo "[SERVER] Action: bundle_result\n";
+
+            $name = $payload['name'];
+            $version = $payload['version'];
+            $status = $payload['status'];
+
+            $stmt = $mydb->prepare("UPDATE bundles SET status = ? WHERE name = ? AND version = ?");
+            $stmt->bind_param("ssi", $status, $name, $version);
+            $stmt->execute();
+
+            echo "[SERVER] Updated bundle '$name' version $version to status '$status'\n";
+            return ["status" => "ok", "message" => "Bundle result updated"];
+
+        case 'get_latest_bundle_any_status':
+            echo "[SERVER] Action: get_latest_bundle_any_status\n";
+
+            $name = $payload['name'];
+
+            $stmt = $mydb->prepare("SELECT name, version, status, size FROM bundles WHERE name = ? ORDER BY version DESC LIMIT 1");
+            $stmt->bind_param("s", $name);
+            $stmt->execute();
+            $result = $stmt->get_result();
+
+            if ($row = $result->fetch_assoc()) {
+                echo "[SERVER] Latest bundle found:\n";
+                print_r($row);
+                return $row;
+            } else {
+                echo "[SERVER] No bundles found for '$name'\n";
+                return [];
             }
-            $bundle = getLatestPassedBundle($request['name']);
-            return $bundle ? $bundle : ["status" => "not_found"];
-        case "register_bundle":
-            return registerNewBundleFromDev($request);
-        
+
+        case 'register_bundle':
+            echo "[SERVER] Action: register_bundle\n";
+
+            $stmt = $mydb->prepare("INSERT INTO bundles (name, version, status, size) VALUES (?, ?, ?, ?)");
+            $stmt->bind_param("sisi", $payload['name'], $payload['version'], $payload['status'], $payload['size']);
+            $stmt->execute();
+
+            echo "[SERVER] Registered new bundle: {$payload['name']} version {$payload['version']}\n";
+            return ["status" => "ok", "message" => "Bundle registered"];
+
         default:
-            return ["status" => "error", "message" => "Unsupported action: " . $request['action']];
+            echo "[SERVER] Unknown action '{$payload['action']}'\n";
+            return ["status" => "error", "message" => "Unknown action"];
     }
 }
-
 
 // === Deployment Server Listener ===
-    $server = new rabbitMQServer("deploymentRabbitMQ.ini", "deploymentServer");
-    echo "deploymentServer BEGIN" . PHP_EOL;
-    $server->process_requests("requestProcessor");
+echo "[SERVER] Starting deployment server listener...\n";
+
+$server = new rabbitMQServer("deploymentRabbitMQ.ini", "deploymentServer");
+$server->process_requests("handleDeploymentMessage");
 ?>
