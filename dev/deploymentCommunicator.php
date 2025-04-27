@@ -95,7 +95,7 @@ function createBundleTarball($type, $bundleName) {
             'status' => 'new',
             'size' => $size
         ];
-    
+        var_dump($request);
         echo "[COMMUNICATOR] Registering bundle with deployment server...\n";
 
         $client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
