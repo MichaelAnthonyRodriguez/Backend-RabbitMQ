@@ -97,7 +97,7 @@ function createBundleTarball($type, $bundleName, $version) {
 }
 
 function registerBundleMetadata($bundleName, $version, $size) {
-    $client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
+    //$client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
 
     try {
         $response = $client->send_request([
