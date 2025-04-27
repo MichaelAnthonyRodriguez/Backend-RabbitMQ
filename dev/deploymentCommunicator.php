@@ -15,12 +15,12 @@ function requestNewBundlesFromDeployment($target = "deploymentServer") {
     ]);
 
     if (isset($response['bundles'])) {
-        echo "New Bundles:\n";
+        echo "New Bundles:";
         foreach ($response['bundles'] as $bundle) {
-            echo "- {$bundle['name']} v{$bundle['version']}\n";
+            echo "- {$bundle['name']} v{$bundle['version']}";
         }
     } else {
-        echo "No new bundles found.\n";
+        echo "No new bundles found.";
     }
 }
 
@@ -34,35 +34,15 @@ function sendBundleResultToDeployment($name, $version, $status, $target = "deplo
         'status' => $status
     ]);
 
-    echo "[DEPLOYMENT] Result sent for $name v$version: $status\n";
+    echo "[DEPLOYMENT] Result sent for $name v$version: $status";
     print_r($response);
 }
 
-// === RabbitMQ Client Call: Get latest passed bundle by name ===
-function requestLatestPassedBundle($bundleName, $target = "deploymentServer") {
-    $client = new rabbitMQClient("deploymentRabbitMQ.ini", $target);
-    $response = $client->send_request([
-        'action' => 'get_latest_passed_bundle',
-        'name' => $bundleName
-    ]);
-
-    if (isset($response['version'])) {
-        echo "Latest passed bundle: {$response['name']} v{$response['version']} ({$response['size']} bytes)\n";
-    } else {
-        echo "No passed bundles found for '{$bundleName}'\n";
-    }
-}
-
-//Create bundle zip
+// === RabbitMQ Client Call: Create and send a bundle ===
 function createBundleTarball($type, $bundleName) {
-    //error_reporting(E_ALL);
-    ini_set('display_errors', 1);
-
-    echo "[INFO] Starting createBundleTarball()\n";
-
     $validTypes = ['frontend', 'backend', 'dmz'];
     if (!in_array($type, $validTypes)) {
-        echo "[ERROR] Invalid type: $type (must be frontend, backend, or dmz)\n";
+        echo "Invalid type: $type (must be frontend, backend, or dmz)";
         return;
     }
 
@@ -73,59 +53,40 @@ function createBundleTarball($type, $bundleName) {
     ];
 
     $sourceDir = $sourceDirMap[$type];
-    echo "[INFO] Source directory resolved: $sourceDir\n";
+    echo "[INFO] Source directory: $sourceDir";
 
     if (!is_dir($sourceDir)) {
-        echo "[ERROR] Source directory does not exist: $sourceDir\n";
+        echo "[ERROR] Source directory does not exist: $sourceDir";
         return;
     }
 
-    $files = scandir($sourceDir);
-    if (!$files || count(array_diff($files, ['.', '..'])) === 0) {
-        echo "[ERROR] Source directory $sourceDir is empty. Cannot create bundle.\n";
-        return;
-    }
-
-    echo "[INFO] Connecting to deployment server...\n";
     $client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
 
-    echo "[INFO] Requesting latest bundle version...\n";
+    echo "[INFO] Requesting latest bundle version...";
     $response = $client->send_request([
         'action' => 'get_latest_bundle_any_status',
         'name' => $bundleName
     ]);
 
-    echo "[INFO] Deployment server response:\n";
-    print_r($response);
+    $latestVersion = isset($response['version']) ? (int)$response['version'] : 0;
+    $nextVersion = $latestVersion + 1;
 
-    if (!is_array($response) || empty($response) || !isset($response['version'])) {
-        echo "[INFO] No existing bundle found. Starting at version 1.\n";
-        $nextVersion = 1;
-    } else {
-        $latestVersion = (int)$response['version'];
-        echo "[INFO] Latest version found: $latestVersion\n";
-        $nextVersion = $latestVersion + 1;
-    }
-
-    echo "[INFO] Creating tarball for version $nextVersion...\n";
+    echo "[INFO] Creating bundle '$bundleName' version $nextVersion";
 
     $bundleFilename = "{$bundleName}_v{$nextVersion}.tgz";
     $bundlePath = "/tmp/$bundleFilename";
 
-    $tarCommand = "tar -czf $bundlePath -C $sourceDir . 2>&1";
-    echo "[INFO] Running tar command: $tarCommand\n";
-    $tarResult = shell_exec($tarCommand);
-    echo "[INFO] Tar output:\n$tarResult\n";
+    shell_exec("tar -czf $bundlePath -C $sourceDir .");
 
     if (!file_exists($bundlePath)) {
-        echo "[ERROR] Failed to create tarball.\n";
+        echo "[ERROR] Failed to create tarball.";
         return;
     }
 
     $size = filesize($bundlePath);
-    echo "[INFO] Tarball created successfully. Size: $size bytes\n";
 
-    echo "[INFO] Registering bundle with deployment server...\n";
+    // Register the bundle
+    echo "[COMMUNICATOR] Registering bundle with deployment server...";
     $registration = $client->send_request([
         'action' => 'register_bundle',
         'name' => $bundleName,
@@ -135,39 +96,32 @@ function createBundleTarball($type, $bundleName) {
         'filename' => $bundleFilename
     ]);
 
-    print_r($registration);
+    if (!isset($registration['status']) || $registration['status'] !== 'ok') {
+        echo "[ERROR] Bundle registration failed: ";
+        print_r($registration);
+        return;
+    }
 
+    echo "[COMMUNICATOR] Bundle registered successfully.";
+
+    // Now SCP the bundle
     $deployHost = "michael-anthony-rodriguez@100.105.162.20";
     $deployDest = "/home/michael-anthony-rodriguez/bundles/$bundleFilename";
 
-    echo "[INFO] Sending bundle to deployment server...\n";
+    echo "[COMMUNICATOR] Sending bundle tarball...";
     $scpCommand = "scp $bundlePath $deployHost:$deployDest 2>&1";
+    echo "[DEBUG] SCP Command: $scpCommand";
     $scpResult = shell_exec($scpCommand);
-    echo "[INFO] SCP output:\n$scpResult\n";
+    echo "[DEBUG] SCP Output:$scpResult";
 
     if (strpos($scpResult, "No such file") !== false || strpos($scpResult, "Permission denied") !== false) {
-        echo "[ERROR] SCP failed.\n";
+        echo "[ERROR] SCP failed.";
     } else {
-        echo "[INFO] SCP successful.\n";
+        echo "[COMMUNICATOR] Bundle sent successfully.";
     }
 
-    echo "[INFO] Cleaning up temp bundle file...\n";
+    // Clean up
     shell_exec("rm -f $bundlePath");
-
-    echo "[INFO] Finished createBundleTarball()\n";
-}
-
-
-
-
-function requestLatestAnyStatusBundle($bundleName, $target = "deploymentServer") {
-    $client = new rabbitMQClient("deploymentRabbitMQ.ini", $target);
-    $response = $client->send_request([
-        'action' => 'get_latest_bundle_any_status',
-        'name' => $bundleName
-    ]);
-
-    return $response;
 }
 
 // === CLI Entry Point ===
@@ -178,36 +132,22 @@ if (php_sapi_name() === 'cli') {
         case "get_new_bundles":
             requestNewBundlesFromDeployment();
             break;
-
         case "bundle_result":
             if (isset($argv[2], $argv[3], $argv[4])) {
                 sendBundleResultToDeployment($argv[2], $argv[3], $argv[4]);
             } else {
-                echo "Usage: php developmentCommunicator.php bundle_result <name> <version> <passed|failed>\n";
+                echo "Usage: php deploymentCommunicator.php bundle_result <name> <version> <passed|failed>";
             }
             break;
-
-        case "get_latest_passed_bundle":
-            if (isset($argv[2])) {
-                requestLatestPassedBundle($argv[2]);
-            } else {
-                echo "Usage: php developmentCommunicator.php get_latest_passed_bundle <bundleName>\n";
-            }
-            break;
-
         case "create_bundle":
             if (isset($argv[2], $argv[3])) {
                 createBundleTarball($argv[2], $argv[3]);
             } else {
-                echo "Usage: php developmentCommunicator.php create_bundle <type> <bundleName>\n";
+                echo "Usage: php deploymentCommunicator.php create_bundle <type> <bundleName>";
             }
             break;
-
         default:
-            echo "Usage:\n";
-            echo "  php developmentCommunicator.php get_new_bundles\n";
-            echo "  php developmentCommunicator.php bundle_result <name> <version> <passed|failed>\n";
-            echo "  php developmentCommunicator.php get_latest_passed_bundle <bundleName>\n";
+            echo "Unknown command.";
     }
 }
 ?>
