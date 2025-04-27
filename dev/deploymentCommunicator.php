@@ -63,8 +63,8 @@ function createBundleTarball($type, $bundleName) {
 
     $sourceDirMap = [
         'frontend' => '/var/www/sample',
-        'backend'  => '/home/RabbitMQ/serverBackend',
-        'dmz'      => '/home/RabbitMQ/dmz'
+        'backend'  => '/home/michael-anthony-rodriguez/RabbitMQ/serverBackend',
+        'dmz'      => '/home/michael-anthony-rodriguez/RabbitMQ/dmz'
     ];
 
     $sourceDir = $sourceDirMap[$type];
@@ -117,9 +117,9 @@ function createBundleTarball($type, $bundleName) {
 
     print_r($registration);
 
-    // SCP tarball to deployment server using the correct username
+    // SCP tarball to deployment server using correct username and full home path
     $deployHost = "michael-anthony-rodriguez@100.105.162.20";
-    $deployDest = "/home/bundles/$bundleFilename";
+    $deployDest = "/home/michael-anthony-rodriguez/bundles/$bundleFilename";
 
     echo "Sending bundle to deployment server...\n";
     $scpCommand = "scp $bundlePath $deployHost:$deployDest 2>&1";
