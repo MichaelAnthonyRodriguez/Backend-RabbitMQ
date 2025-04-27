@@ -74,6 +74,13 @@ function createBundleTarball($type, $bundleName) {
         return;
     }
 
+    // Additional check: directory must not be empty
+    $files = scandir($sourceDir);
+    if (!$files || count(array_diff($files, ['.', '..'])) === 0) {
+        echo "Source directory $sourceDir is empty. Cannot create bundle.\n";
+        return;
+    }
+
     $client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
 
     // Get latest version of the bundle
@@ -96,10 +103,13 @@ function createBundleTarball($type, $bundleName) {
     $bundleFilename = "{$bundleName}_v{$nextVersion}.tgz";
     $bundlePath = "/tmp/$bundleFilename";
 
-    shell_exec("tar -czf $bundlePath -C $sourceDir .");
+    $tarCommand = "tar -czf $bundlePath -C $sourceDir . 2>&1";
+    echo "Running tar command: $tarCommand\n";
+    $tarResult = shell_exec($tarCommand);
 
     if (!file_exists($bundlePath)) {
-        echo "Failed to create tarball.\n";
+        echo "Failed to create tarball. Tar output:\n";
+        echo $tarResult;
         return;
     }
 
@@ -117,7 +127,7 @@ function createBundleTarball($type, $bundleName) {
 
     print_r($registration);
 
-    // SCP tarball to deployment server using correct username and full home path
+    // SCP tarball to deployment server
     $deployHost = "michael-anthony-rodriguez@100.105.162.20";
     $deployDest = "/home/michael-anthony-rodriguez/bundles/$bundleFilename";
 
@@ -134,6 +144,7 @@ function createBundleTarball($type, $bundleName) {
     // Cleanup
     shell_exec("rm -f $bundlePath");
 }
+
 
 
 
