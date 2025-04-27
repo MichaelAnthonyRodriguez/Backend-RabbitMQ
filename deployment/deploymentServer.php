@@ -84,10 +84,8 @@ function requestProcessor($request) {
             return getLatestBundleAnyStatus($request['name']);
         case 'register_bundle':
             return registerBundle($request['name'], $request['version'], $request['status'], $request['size']);
-        default:
-            echo "[SERVER] ERROR: Unknown action '{$request['action']}'\n";
-            return ["status" => "error", "message" => "Unknown action '{$request['action']}'"];
     }
+    return ["returnCode" => '0', "message" => "Server received request and processed"];
 }
 
 // === Start Deployment Server ===
