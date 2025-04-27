@@ -33,7 +33,7 @@ function sendBundleResultToDeployment($name, $version, $status, $target = "deplo
         'version' => (int)$version,
         'status' => $status
     ]);
-    $conn->disconnect();
+
     echo "[DEPLOYMENT] Result sent for $name v$version: $status\n";
     print_r($response);
 }
@@ -97,7 +97,7 @@ function createBundleTarball($type, $bundleName) {
         ];
     
         echo "[COMMUNICATOR] Registering bundle with deployment server...\n";
-    
+        $conn->disconnect();
         $client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
         $response = $client->send_request($request);
 
