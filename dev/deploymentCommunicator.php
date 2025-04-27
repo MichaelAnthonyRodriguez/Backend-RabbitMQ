@@ -55,7 +55,7 @@ function requestLatestPassedBundle($bundleName, $target = "deploymentServer") {
 
 //Create bundle zip
 function createBundleTarball($type, $bundleName) {
-    error_reporting(E_ALL);
+    //error_reporting(E_ALL);
     ini_set('display_errors', 1);
 
     echo "[INFO] Starting createBundleTarball()\n";
@@ -138,7 +138,7 @@ function createBundleTarball($type, $bundleName) {
     print_r($registration);
 
     $deployHost = "michael-anthony-rodriguez@100.105.162.20";
-    $deployDest = "/home/michael-anthony-rodriguez/bundles/$bundleFilename";
+    $deployDest = "/home/michael-anthony-rodriguez/bundles/";
 
     echo "[INFO] Sending bundle to deployment server...\n";
     $scpCommand = "scp $bundlePath $deployHost:$deployDest 2>&1";
