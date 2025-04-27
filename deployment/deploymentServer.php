@@ -84,7 +84,7 @@ function requestProcessor($request) {
         case 'register_bundle':
             return registerBundle($request['name'], $request['version'], $request['status'], $request['size']);
     }
-    return ["returnCode" => '0', "message" => "Server received request and processed"];
+    return array("returnCode" => '0', 'message'=>"Server received request and processed");
 }
 
 $server = new rabbitMQServer("deploymentRabbitMQ.ini", "deploymentServer");
