@@ -82,8 +82,13 @@ function createBundleTarball($type, $bundleName) {
         'name' => $bundleName
     ]);
 
-    $latestVersion = isset($response['version']) ? (int)$response['version'] : 0;
-    $nextVersion = $latestVersion + 1;
+    if (!is_array($response) || empty($response) || !isset($response['version'])) {
+        echo "No existing bundle found. Starting at version 1.\n";
+        $nextVersion = 1;
+    } else {
+        $latestVersion = (int)$response['version'];
+        $nextVersion = $latestVersion + 1;
+    }
 
     echo "Creating bundle '$bundleName' version $nextVersion\n";
 
@@ -112,14 +117,15 @@ function createBundleTarball($type, $bundleName) {
 
     print_r($registration);
 
-    // SCP tarball to deployment server
-    $deployHost = "100.105.162.20";
-    $deployDest = "/home/michael-anthony-rodriguez/bundles/$bundleFilename";
+    // SCP tarball to deployment server using the correct username
+    $deployHost = "michael-anthony-rodriguez@100.105.162.20";
+    $deployDest = "/home/bundles/$bundleFilename";
 
     echo "Sending bundle to deployment server...\n";
-    $scpResult = shell_exec("scp $bundlePath $deployHost:$deployDest 2>&1");
+    $scpCommand = "scp $bundlePath $deployHost:$deployDest 2>&1";
+    $scpResult = shell_exec($scpCommand);
 
-    if (str_contains($scpResult, "No such file") || str_contains($scpResult, "Permission denied")) {
+    if (strpos($scpResult, "No such file") !== false || strpos($scpResult, "Permission denied") !== false) {
         echo "SCP failed: $scpResult\n";
     } else {
         echo "Bundle successfully sent to deployment server.\n";
@@ -128,6 +134,7 @@ function createBundleTarball($type, $bundleName) {
     // Cleanup
     shell_exec("rm -f $bundlePath");
 }
+
 
 
 
