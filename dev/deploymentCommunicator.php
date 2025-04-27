@@ -55,6 +55,10 @@ function requestLatestPassedBundle($bundleName, $target = "deploymentServer") {
 
 //Create bundle zip
 function createBundleTarball($type, $bundleName) {
+    // Always show errors
+    error_reporting(E_ALL);
+    ini_set('display_errors', 1);
+
     $validTypes = ['frontend', 'backend', 'dmz'];
     if (!in_array($type, $validTypes)) {
         echo "Invalid type: $type (must be frontend, backend, or dmz)\n";
@@ -74,7 +78,7 @@ function createBundleTarball($type, $bundleName) {
         return;
     }
 
-    // Additional check: directory must not be empty
+    // Check that the directory is not empty
     $files = scandir($sourceDir);
     if (!$files || count(array_diff($files, ['.', '..'])) === 0) {
         echo "Source directory $sourceDir is empty. Cannot create bundle.\n";
@@ -83,23 +87,28 @@ function createBundleTarball($type, $bundleName) {
 
     $client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
 
-    // Get latest version of the bundle
+    // Request latest bundle version
+    echo "Requesting latest bundle info from deployment server...\n";
     $response = $client->send_request([
         'action' => 'get_latest_bundle_any_status',
         'name' => $bundleName
     ]);
+
+    echo "Deployment server response:\n";
+    print_r($response);
 
     if (!is_array($response) || empty($response) || !isset($response['version'])) {
         echo "No existing bundle found. Starting at version 1.\n";
         $nextVersion = 1;
     } else {
         $latestVersion = (int)$response['version'];
+        echo "Latest version found: $latestVersion\n";
         $nextVersion = $latestVersion + 1;
     }
 
     echo "Creating bundle '$bundleName' version $nextVersion\n";
 
-    // Create tarball and capture output
+    // Create tarball
     $bundleFilename = "{$bundleName}_v{$nextVersion}.tgz";
     $bundlePath = "/tmp/$bundleFilename";
 
@@ -116,6 +125,7 @@ function createBundleTarball($type, $bundleName) {
     $size = filesize($bundlePath);
 
     // Send bundle metadata to deployment server
+    echo "Registering new bundle version $nextVersion with deployment server...\n";
     $registration = $client->send_request([
         'action' => 'register_bundle',
         'name' => $bundleName,
@@ -134,9 +144,10 @@ function createBundleTarball($type, $bundleName) {
     echo "Sending bundle to deployment server...\n";
     $scpCommand = "scp $bundlePath $deployHost:$deployDest 2>&1";
     $scpResult = shell_exec($scpCommand);
+    echo "SCP Output:\n" . $scpResult . "\n";
 
     if (strpos($scpResult, "No such file") !== false || strpos($scpResult, "Permission denied") !== false) {
-        echo "SCP failed: $scpResult\n";
+        echo "SCP failed.\n";
     } else {
         echo "Bundle successfully sent to deployment server.\n";
     }
@@ -144,9 +155,6 @@ function createBundleTarball($type, $bundleName) {
     // Cleanup
     shell_exec("rm -f $bundlePath");
 }
-
-
-
 
 
 
