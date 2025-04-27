@@ -71,8 +71,7 @@ function requestProcessor($request) {
     var_dump($request);
 
     if (!isset($request['action'])) {
-        echo "[SERVER] ERROR: No action provided.\n";
-        return ["status" => "error", "message" => "No action provided"];
+        return "ERROR: unsupported message type";
     }
 
     switch ($request['action']) {
@@ -88,9 +87,8 @@ function requestProcessor($request) {
     return ["returnCode" => '0', "message" => "Server received request and processed"];
 }
 
-// === Start Deployment Server ===
 $server = new rabbitMQServer("deploymentRabbitMQ.ini", "deploymentServer");
-echo "[SERVER] Deployment Server is starting...\n";
+echo "[SERVER] Deployment Server is starting..." . PHP_EOL;
 $server->process_requests("requestProcessor");
 
 ?>
