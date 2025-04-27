@@ -102,7 +102,7 @@ function createBundleTarball($type, $bundleName) {
         echo "[COMMUNICATOR] creating client...\n";
         $newresponse = $newclient->send_request($newrequest);
         echo "[COMMUNICATOR] sending request...\n";
-        print_r($newresponse);
+        var_dump($newresponse);
         echo "[COMMUNICATOR] Request sent. waiting for status\n";
     
         if ($newresponse["status"] === "success") {
