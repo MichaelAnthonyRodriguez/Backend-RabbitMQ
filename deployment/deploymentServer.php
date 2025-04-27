@@ -61,7 +61,7 @@ function registerBundle($name, $version, $status, $size) {
     $stmt = $mydb->prepare("INSERT INTO bundles (name, version, status, size) VALUES (?, ?, ?, ?)");
     $stmt->bind_param("sisi", $name, $version, $status, $size);
     $stmt->execute();
-
+    echo "[SERVER] Bundle registered\n";
     return ["status" => "ok", "message" => "Bundle registered"];
 }
 

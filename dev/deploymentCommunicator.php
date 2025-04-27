@@ -92,8 +92,7 @@ function createBundleTarball($type, $bundleName) {
         'name' => $bundleName,
         'version' => $nextVersion,
         'status' => 'new',
-        'size' => $size,
-        'filename' => $bundleFilename
+        'size' => $size
     ]);
 
     if (!isset($registration['status']) || $registration['status'] !== 'ok') {
