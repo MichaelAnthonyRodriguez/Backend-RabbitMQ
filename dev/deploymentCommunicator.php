@@ -63,7 +63,7 @@ function getLatestVersionNumber($bundleName) {
 
 
 // === RabbitMQ Client Call: Create and send a bundle ===
-function createBundleTarball($type, $bundleName) {
+function createBundleTarball($type, $bundleName, $newVersion) {
     $validTypes = ['frontend', 'backend', 'dmz'];
     if (!in_array($type, $validTypes)) {
         echo "[ERROR] Invalid type: $type (must be frontend, backend, or dmz)\n";
@@ -83,18 +83,9 @@ function createBundleTarball($type, $bundleName) {
         return;
     }
 
-    echo "[COMMUNICATOR] Requesting latest bundle version from server...\n";
-    $latestVersion = getLatestVersionNumber($bundleName);
+    echo "[COMMUNICATOR] Creating bundle '$bundleName' version $newVersion\n";
 
-    if ($latestVersion === null) {
-        echo "[ERROR] Could not fetch latest bundle version.\n";
-        return;
-    }
-
-    $nextVersion = $latestVersion + 1;
-    echo "[COMMUNICATOR] Creating bundle '$bundleName' version $nextVersion\n";
-
-    $bundleFilename = "{$bundleName}_v{$nextVersion}.tgz";
+    $bundleFilename = "{$bundleName}_v{$newVersion}.tgz";
     $bundlePath = "/tmp/$bundleFilename";
 
     shell_exec("tar -czf $bundlePath -C $sourceDir .");
@@ -106,7 +97,7 @@ function createBundleTarball($type, $bundleName) {
 
     $size = filesize($bundlePath);
 
-    // Now register the bundle separately
+    // Register the bundle
     try {
         echo "[COMMUNICATOR] Registering bundle with deployment server...\n";
         $client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
@@ -114,7 +105,7 @@ function createBundleTarball($type, $bundleName) {
         $registerRequest = [
             'action' => 'register_bundle',
             'name' => $bundleName,
-            'version' => $nextVersion,
+            'version' => $newVersion,
             'status' => 'new',
             'size' => $size
         ];
@@ -130,7 +121,7 @@ function createBundleTarball($type, $bundleName) {
 
         echo "[COMMUNICATOR] Bundle registered successfully.\n";
 
-        // SCP the bundle tarball after successful registration
+        // SCP tarball
         $deployHost = "michael-anthony-rodriguez@100.105.162.20";
         $deployDest = "/home/michael-anthony-rodriguez/bundles/$bundleFilename";
 
@@ -142,7 +133,7 @@ function createBundleTarball($type, $bundleName) {
         if (strpos($scpResult, "No such file") !== false || strpos($scpResult, "Permission denied") !== false) {
             echo "[ERROR] SCP failed: $scpResult\n";
         } else {
-            echo "[COMMUNICATOR] Bundle file transferred successfully.\n";
+            echo "[COMMUNICATOR] Bundle transferred successfully.\n";
         }
 
     } catch (Exception $e) {
@@ -155,6 +146,7 @@ function createBundleTarball($type, $bundleName) {
 }
 
 
+
 // === CLI Entry Point ===
 if (php_sapi_name() === 'cli') {
     $cmd = $argv[1] ?? null;
@@ -163,22 +155,40 @@ if (php_sapi_name() === 'cli') {
         case "get_new_bundles":
             requestNewBundlesFromDeployment();
             break;
+
         case "bundle_result":
             if (isset($argv[2], $argv[3], $argv[4])) {
                 sendBundleResultToDeployment($argv[2], $argv[3], $argv[4]);
             } else {
-                echo "Usage: php deploymentCommunicator.php bundle_result <name> <version> <passed|failed>";
+                echo "Usage: php deploymentCommunicator.php bundle_result <name> <version> <passed|failed>\n";
             }
             break;
+
         case "create_bundle":
             if (isset($argv[2], $argv[3])) {
-                createBundleTarball($argv[2], $argv[3]);
+                $type = $argv[2];
+                $bundleName = $argv[3];
+
+                echo "[CLI] Getting latest version for '$bundleName'...\n";
+                $latestVersion = getLatestVersionNumber($bundleName);
+
+                if ($latestVersion === null) {
+                    echo "[ERROR] Could not determine latest version. Aborting.\n";
+                    exit(1);
+                }
+
+                $newVersion = $latestVersion + 1;
+                echo "[CLI] Creating new bundle version: $newVersion\n";
+
+                createBundleTarball($type, $bundleName, $newVersion);
+
             } else {
-                echo "Usage: php deploymentCommunicator.php create_bundle <type> <bundleName>";
+                echo "Usage: php deploymentCommunicator.php create_bundle <type> <bundleName>\n";
             }
             break;
+
         default:
-            echo "Unknown command.";
+            echo "Unknown command.\n";
     }
 }
 ?>
