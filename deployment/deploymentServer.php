@@ -24,6 +24,10 @@ function handleDeploymentMessage($payload) {
     echo "[SERVER] Payload Received:\n";
     print_r($payload);
 
+    if (function_exists('ackCurrentMessage')) {
+        ackCurrentMessage();
+    }
+
     if (!isset($payload['action'])) {
         echo "[SERVER] ERROR: No 'action' specified in payload.\n";
         return ["status" => "error", "message" => "No action specified"];
