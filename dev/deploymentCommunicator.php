@@ -85,27 +85,35 @@ function createBundleTarball($type, $bundleName) {
 
     $size = filesize($bundlePath);
 
-    $client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
-
     // Register the bundle
-    echo "[COMMUNICATOR] Registering bundle with deployment server...\n";
-    $registration = $client->send_request([
-        'action' => 'register_bundle',
-        'name' => $bundleName,
-        'version' => $nextVersion,
-        'status' => 'new',
-        'size' => $size
-    ]);
+    try {
+        // Build request
+        $request = [
+            'action' => 'register_bundle',
+            'name' => $bundleName,
+            'version' => $nextVersion,
+            'status' => 'new',
+            'size' => $size
+        ];
+    
+        echo "[COMMUNICATOR] Registering bundle with deployment server...\n";
+    
+        $client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
+        $response = $client->send_request($request);
 
-    echo "[COMMUNICATOR] Request sent. waiting for status\n";
-
-    if (!isset($registration['status']) || $registration['status'] !== 'ok') {
-        echo "[ERROR] Bundle registration failed: ";
-        print_r($registration);
-        return;
+        echo "[COMMUNICATOR] Request sent. waiting for status\n";
+    
+        if ($response["status"] === "success") {
+            echo "[COMMUNICATOR] Bundle registered successfully.\n";
+            print_r($registration);
+        } else {
+            echo "[ERROR] Bundle registration failed: ";
+            print_r($registration);
+        }
+    
+    } catch (Exception $e) {
+      echo "Error sending message: " . $e->getMessage();
     }
-
-    echo "[COMMUNICATOR] Bundle registered successfully.\n";
 
     // Now SCP the bundle
     $deployHost = "michael-anthony-rodriguez@100.105.162.20";
