@@ -145,63 +145,65 @@ if (php_sapi_name() === 'cli') {
     switch ($cmd) {
         case "get_new_bundles":
             requestNewBundlesFromDeployment();
-            break;
+            exit(0);
 
         case "bundle_result":
             if (isset($argv[2], $argv[3], $argv[4])) {
                 sendBundleResultToDeployment($argv[2], $argv[3], $argv[4]);
+                exit(0);
             } else {
                 echo "Usage: php deploymentCommunicator.php bundle_result <name> <version> <passed|failed>\n";
+                exit(1);
             }
-            break;
 
         case "create_bundle":
             if (isset($argv[2], $argv[3])) {
                 $type = $argv[2];
                 $bundleName = $argv[3];
-        
+
                 echo "[CLI] Getting latest version for '$bundleName'...\n";
                 $latestVersion = getLatestVersionNumber($bundleName);
-        
+
                 if ($latestVersion === null) {
                     echo "[ERROR] Cannot get latest version.\n";
                     exit(1);
                 }
-        
+
                 $newVersion = $latestVersion + 1;
                 echo "[CLI] New version will be: $newVersion\n";
-        
+
                 $bundlePath = createBundleTarball($type, $bundleName, $newVersion);
-        
+
                 if ($bundlePath === null) {
                     echo "[ERROR] Bundle tarball creation failed.\n";
                     exit(1);
                 }
-        
+
                 if (!sendBundleTarball($bundlePath, basename($bundlePath))) {
                     echo "[ERROR] Failed to send bundle tarball.\n";
                     exit(1);
                 }
-        
+
                 $size = filesize($bundlePath);
-        
+
                 if (!registerBundleMetadata($bundleName, $newVersion, $size)) {
                     echo "[ERROR] Failed to register bundle metadata.\n";
                     exit(1);
                 }
-        
+
                 // Cleanup
                 shell_exec("rm -f $bundlePath");
                 echo "[COMMUNICATOR] Local tarball cleaned up.\n";
-        
+
+                exit(0);
             } else {
                 echo "Usage: php deploymentCommunicator.php create_bundle <type> <bundleName>\n";
+                exit(1);
             }
-            break;
-                   
 
         default:
             echo "Unknown command.\n";
+            exit(1);
     }
 }
 ?>
