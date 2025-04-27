@@ -11,89 +11,110 @@ ini_set('display_errors', 1);
 
 date_default_timezone_set("America/New_York");
 
-// === Handler for Incoming Messages ===
 function handleDeploymentMessage($payload) {
     global $mydb;
 
-    echo "[SERVER] Received message:\n";
+    echo "[SERVER] --- New Incoming Message ---\n";
+
+    if (empty($payload)) {
+        echo "[SERVER] ERROR: Empty payload received.\n";
+        return ["status" => "error", "message" => "Empty payload"];
+    }
+
+    echo "[SERVER] Payload Received:\n";
     print_r($payload);
 
     if (!isset($payload['action'])) {
-        echo "[SERVER] Error: No action specified\n";
-        return ["status" => "error", "message" => "No action provided"];
+        echo "[SERVER] ERROR: No 'action' specified in payload.\n";
+        return ["status" => "error", "message" => "No action specified"];
     }
 
-    switch ($payload['action']) {
+    $action = $payload['action'];
+    echo "[SERVER] Action Requested: $action\n";
+
+    switch ($action) {
         case 'get_new_bundles':
-            echo "[SERVER] Action: get_new_bundles\n";
-            $env = $payload['env'] ?? 'qa';
-
+            echo "[SERVER] Handling 'get_new_bundles'\n";
             $stmt = $mydb->prepare("SELECT name, version FROM bundles WHERE status = 'new'");
-            $stmt->execute();
+            if (!$stmt->execute()) {
+                echo "[SERVER] ERROR: Failed to query bundles.\n";
+                return ["status" => "error", "message" => "DB query failed"];
+            }
             $result = $stmt->get_result();
-
             $bundles = [];
             while ($row = $result->fetch_assoc()) {
                 $bundles[] = $row;
             }
-
-            echo "[SERVER] Found bundles:\n";
+            echo "[SERVER] Found Bundles:\n";
             print_r($bundles);
-
             return ['bundles' => $bundles];
 
         case 'bundle_result':
-            echo "[SERVER] Action: bundle_result\n";
-
+            echo "[SERVER] Handling 'bundle_result'\n";
             $name = $payload['name'];
             $version = $payload['version'];
             $status = $payload['status'];
 
             $stmt = $mydb->prepare("UPDATE bundles SET status = ? WHERE name = ? AND version = ?");
             $stmt->bind_param("ssi", $status, $name, $version);
-            $stmt->execute();
 
-            echo "[SERVER] Updated bundle '$name' version $version to status '$status'\n";
+            if (!$stmt->execute()) {
+                echo "[SERVER] ERROR: Failed to update bundle result.\n";
+                return ["status" => "error", "message" => "Failed to update bundle result"];
+            }
+
+            echo "[SERVER] Bundle '$name' version $version updated to status '$status'.\n";
             return ["status" => "ok", "message" => "Bundle result updated"];
 
         case 'get_latest_bundle_any_status':
-            echo "[SERVER] Action: get_latest_bundle_any_status\n";
-
+            echo "[SERVER] Handling 'get_latest_bundle_any_status'\n";
             $name = $payload['name'];
 
             $stmt = $mydb->prepare("SELECT name, version, status, size FROM bundles WHERE name = ? ORDER BY version DESC LIMIT 1");
             $stmt->bind_param("s", $name);
-            $stmt->execute();
-            $result = $stmt->get_result();
 
+            if (!$stmt->execute()) {
+                echo "[SERVER] ERROR: Failed to query latest bundle.\n";
+                return ["status" => "error", "message" => "Failed to fetch latest bundle"];
+            }
+
+            $result = $stmt->get_result();
             if ($row = $result->fetch_assoc()) {
-                echo "[SERVER] Latest bundle found:\n";
+                echo "[SERVER] Latest Bundle Found:\n";
                 print_r($row);
                 return $row;
             } else {
-                echo "[SERVER] No bundles found for '$name'\n";
+                echo "[SERVER] No bundle found for name: $name\n";
                 return [];
             }
 
         case 'register_bundle':
-            echo "[SERVER] Action: register_bundle\n";
+            echo "[SERVER] Handling 'register_bundle'\n";
+            $name = $payload['name'];
+            $version = $payload['version'];
+            $status = $payload['status'];
+            $size = $payload['size'];
 
             $stmt = $mydb->prepare("INSERT INTO bundles (name, version, status, size) VALUES (?, ?, ?, ?)");
-            $stmt->bind_param("sisi", $payload['name'], $payload['version'], $payload['status'], $payload['size']);
-            $stmt->execute();
+            $stmt->bind_param("sisi", $name, $version, $status, $size);
 
-            echo "[SERVER] Registered new bundle: {$payload['name']} version {$payload['version']}\n";
+            if (!$stmt->execute()) {
+                echo "[SERVER] ERROR: Failed to register bundle.\n";
+                return ["status" => "error", "message" => "Failed to register bundle"];
+            }
+
+            echo "[SERVER] Bundle '$name' version $version registered successfully.\n";
             return ["status" => "ok", "message" => "Bundle registered"];
 
         default:
-            echo "[SERVER] Unknown action '{$payload['action']}'\n";
-            return ["status" => "error", "message" => "Unknown action"];
+            echo "[SERVER] ERROR: Unknown action '$action'\n";
+            return ["status" => "error", "message" => "Unknown action: $action"];
     }
 }
 
-// === Deployment Server Listener ===
-echo "[SERVER] Starting deployment server listener...\n";
+echo "[SERVER] === Deployment Server Listener Starting ===\n";
 
 $server = new rabbitMQServer("deploymentRabbitMQ.ini", "deploymentServer");
-$server->process_requests("handleDeploymentMessage");
+$server->process_requests('handleDeploymentMessage');
+
 ?>

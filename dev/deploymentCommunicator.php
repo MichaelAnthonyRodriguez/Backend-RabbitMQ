@@ -138,7 +138,7 @@ function createBundleTarball($type, $bundleName) {
     print_r($registration);
 
     $deployHost = "michael-anthony-rodriguez@100.105.162.20";
-    $deployDest = "/home/michael-anthony-rodriguez/bundles/";
+    $deployDest = "/home/michael-anthony-rodriguez/bundles/$bundleFilename";
 
     echo "[INFO] Sending bundle to deployment server...\n";
     $scpCommand = "scp $bundlePath $deployHost:$deployDest 2>&1";
