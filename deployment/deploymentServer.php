@@ -35,7 +35,7 @@ function submitBundleResult($name, $version, $status) {
     $stmt->bind_param("ssi", $status, $name, $version);
     $stmt->execute();
 
-    return ["status" => "ok", "message" => "Bundle result updated"];
+    return ["status" => "success", "message" => "Bundle result updated"];
 }
 
 function getLatestBundleAnyStatus($name) {
@@ -62,7 +62,7 @@ function registerBundle($name, $version, $status, $size) {
     $stmt->bind_param("sisi", $name, $version, $status, $size);
     $stmt->execute();
     echo "[SERVER] Bundle registered\n";
-    return ["status" => "ok", "message" => "Bundle registered"];
+    return ["status" => "success", "message" => "Bundle registered"];
 }
 
 // === Request Processor ===
