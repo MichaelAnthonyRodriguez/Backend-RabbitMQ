@@ -155,14 +155,14 @@ if (php_sapi_name() === 'cli') {
             }
             break;
 
-            case "create_bundle":
-                if (isset($argv[2], $argv[3])) {
-                    $type = $argv[2];
-                    $bundleName = $argv[3];
-            
-                    echo "[CLI] Getting latest version for '$bundleName'...\n";
-                    $latestVersion = getLatestVersionNumber($bundleName);
-            
+        case "create_bundle":
+            if (isset($argv[2], $argv[3])) {
+                $type = $argv[2];
+                $bundleName = $argv[3];
+        
+                echo "[CLI] Getting latest version for '$bundleName'...\n";
+                $latestVersion = getLatestVersionNumber($bundleName);
+        
                 if ($latestVersion === null) {
                     echo "[ERROR] Cannot get latest version.\n";
                     exit(1);
@@ -178,6 +178,11 @@ if (php_sapi_name() === 'cli') {
                     exit(1);
                 }
         
+                if (!sendBundleTarball($bundlePath, basename($bundlePath))) {
+                    echo "[ERROR] Failed to send bundle tarball.\n";
+                    exit(1);
+                }
+        
                 $size = filesize($bundlePath);
         
                 if (!registerBundleMetadata($bundleName, $newVersion, $size)) {
@@ -185,19 +190,15 @@ if (php_sapi_name() === 'cli') {
                     exit(1);
                 }
         
-                if (!sendBundleTarball($bundlePath, basename($bundlePath))) {
-                    echo "[ERROR] Failed to send bundle tarball.\n";
-                    exit(1);
-                }
-        
                 // Cleanup
                 shell_exec("rm -f $bundlePath");
                 echo "[COMMUNICATOR] Local tarball cleaned up.\n";
-            
-                } else {
-                    echo "Usage: php deploymentCommunicator.php create_bundle <type> <bundleName>\n";
-                }
-                break;            
+        
+            } else {
+                echo "Usage: php deploymentCommunicator.php create_bundle <type> <bundleName>\n";
+            }
+            break;
+                   
 
         default:
             echo "Unknown command.\n";
