@@ -86,7 +86,7 @@ function createBundleTarball($type, $bundleName) {
     $size = filesize($bundlePath);
 
     $client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
-    
+
     // Register the bundle
     echo "[COMMUNICATOR] Registering bundle with deployment server...\n";
     $registration = $client->send_request([
@@ -96,6 +96,8 @@ function createBundleTarball($type, $bundleName) {
         'status' => 'new',
         'size' => $size
     ]);
+
+    echo "[COMMUNICATOR] Request sent. waiting for status\n";
 
     if (!isset($registration['status']) || $registration['status'] !== 'ok') {
         echo "[ERROR] Bundle registration failed: ";
