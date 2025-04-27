@@ -99,7 +99,9 @@ function createBundleTarball($type, $bundleName) {
         echo "[COMMUNICATOR] Registering bundle with deployment server...\n";
 
         $client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
+        echo "[COMMUNICATOR] creating client...\n";
         $response = $client->send_request($request);
+        echo "[COMMUNICATOR] sending request...\n";
         print_r($response);
         echo "[COMMUNICATOR] Request sent. waiting for status\n";
     
