@@ -99,17 +99,17 @@ function createBundleTarball($type, $bundleName) {
 
     echo "Creating bundle '$bundleName' version $nextVersion\n";
 
-    // Create tarball
+    // Create tarball and capture output
     $bundleFilename = "{$bundleName}_v{$nextVersion}.tgz";
     $bundlePath = "/tmp/$bundleFilename";
 
     $tarCommand = "tar -czf $bundlePath -C $sourceDir . 2>&1";
     echo "Running tar command: $tarCommand\n";
     $tarResult = shell_exec($tarCommand);
+    echo "Tar Output:\n" . $tarResult . "\n";
 
     if (!file_exists($bundlePath)) {
-        echo "Failed to create tarball. Tar output:\n";
-        echo $tarResult;
+        echo "Failed to create tarball.\n";
         return;
     }
 
@@ -144,6 +144,7 @@ function createBundleTarball($type, $bundleName) {
     // Cleanup
     shell_exec("rm -f $bundlePath");
 }
+
 
 
 
