@@ -33,7 +33,7 @@ function sendBundleResultToDeployment($name, $version, $status, $target = "deplo
         'version' => (int)$version,
         'status' => $status
     ]);
-
+    $conn->disconnect();
     echo "[DEPLOYMENT] Result sent for $name v$version: $status\n";
     print_r($response);
 }
