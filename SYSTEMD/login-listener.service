@@ -1,0 +1,12 @@
+[Unit]
+Description=RabbitMQ Deploy Listener
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/Home/Documents/GitHub/IT490-GroupOfLies
+ExecStart=/usr/bin/php login.php
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

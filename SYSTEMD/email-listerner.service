@@ -1,0 +1,12 @@
+[Unit]
+Description=RabbitMQ Deploy Listener
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/Home/Document/GitHub/Backend-RabbitMQ
+ExecStart=/usr/bin/php movie_watchlist_emailer.php
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
