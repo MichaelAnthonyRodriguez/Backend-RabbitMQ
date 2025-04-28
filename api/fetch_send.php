@@ -38,22 +38,24 @@ function sendToRabbitMQ($data) {
     }
 
     try {
-        $connection = new AMQPStreamConnection(RABBITMQ_HOST, 5672, 'webdev', 'password');
-        $channel = $connection->channel();
+    // Build request
+    $request = [
+        "type"    => "fetch_data",
+        "api_url" => "https://api.themoviedb.org/3/account/21871794?api_key=e7821e4c4141a5fbcaac0777aabb8760"
+    ];
 
-        $channel->queue_declare(RABBITMQ_QUEUE, false, true, false, false);
+    // Send request to RabbitMQ
+    $client = new rabbitMQClient("testRabbitMQ.ini", "testServer");
+    $response = $client->send_request($request);
 
-        $msg = new AMQPMessage($data, ['delivery_mode' => AMQPMessage::DELIVERY_MODE_PERSISTENT]);
-
-        $channel->basic_publish($msg, '', RABBITMQ_QUEUE);
-
-        echo " [x] Data sent to RabbitMQ\n";
-
-        $channel->close();
-        $connection->close();
-    } catch (Exception $e) {
-        echo "Error sending to RabbitMQ: " . $e->getMessage() . "\n";
+    if ($response["status"] === "success") {
+        $_SESSION['fetched_data'] = $response['data'];
+        echo "Data fetched successfully!";
+    } else {
+        echo "Error: " . htmlspecialchars($response["message"]) . "</p>";
     }
+} catch (Exception $e) {
+    echo "Error sending request: " . $e->getMessage();
 }
 
 // Execute script from CLI
@@ -63,5 +65,5 @@ if (php_sapi_name() == "cli") {
 } else {
     echo "This script must be run from the command line.\n";
 }
-
+}
 ?>
