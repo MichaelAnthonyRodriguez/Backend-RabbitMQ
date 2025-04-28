@@ -6,8 +6,8 @@ require_once('rabbitMQLib.inc');
 require_once('mysqlconnect.php');
 require_once('populateDB.php');
 
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+//error_reporting(E_ALL);
+//ini_set('display_errors', 1);
 
 date_default_timezone_set("America/New_York");
 
