@@ -63,6 +63,7 @@ function getLatestVersionNumber($bundleName) {
 // === RabbitMQ Client Call: Create and send a bundle ===
 function createBundleTarball($bundleName, $version) {
     $homeDir = getenv('HOME');
+    $username = getenv('USER');
     $bundleFilename = "{$bundleName}_v{$version}.tgz";
     $bundlePath = "/tmp/$bundleFilename";
 
@@ -89,8 +90,12 @@ function createBundleTarball($bundleName, $version) {
     mkdir($buildDir, 0777, true);
     echo "[COMMUNICATOR] Created temporary build folder: $buildDir\n";
 
-    // Now correctly: copy each file FROM its [file]=folder mapping
+    // Now copy files based on config
     foreach ($config['files'] as $fileName => $sourceFolder) {
+        // Replace [USER] placeholder with the real user's home directory
+        $sourceFolder = str_replace("[USER]", $username, $sourceFolder);
+        $sourceFolder = str_replace("~", $homeDir, $sourceFolder);
+
         $fullSourcePath = rtrim($sourceFolder, '/') . '/' . ltrim($fileName, '/');
 
         if (!file_exists($fullSourcePath)) {
@@ -107,25 +112,25 @@ function createBundleTarball($bundleName, $version) {
         }
     }
 
-    // Copy bundle.ini itself into the root
+    // Copy bundle.ini into root
     if (!copy($configPath, "$buildDir/bundle.ini")) {
         echo "[ERROR] Failed to copy bundle.ini into bundle folder.\n";
         return null;
     }
     echo "[COMMUNICATOR] Added bundle.ini to bundle root.\n";
 
-    // Create tar.gz
+    // Create tar.gz archive
     $command = "tar -czf " . escapeshellarg($bundlePath) . " -C " . escapeshellarg($buildDir) . " .";
     shell_exec($command);
 
     if (!file_exists($bundlePath)) {
-        echo "[ERROR] Tarball creation failed.\n";
+        echo "[ERROR] Failed to create tarball.\n";
         return null;
     }
 
     echo "[COMMUNICATOR] Tarball created successfully at: $bundlePath\n";
 
-    // Cleanup build folder
+    // Cleanup build directory
     shell_exec("rm -rf " . escapeshellarg($buildDir));
     echo "[COMMUNICATOR] Cleaned up temporary build folder.\n";
 
