@@ -62,7 +62,7 @@ function getLatestVersionNumber($bundleName) {
 
 // === RabbitMQ Client Call: Create and send a bundle ===
 function createBundleTarball($bundleName, $version) {
-    $homeDir = getenv('HOME');  // Still get home in case needed for dynamic paths
+    $homeDir = getenv('HOME');  // Get the home directory dynamically
     $bundleFilename = "{$bundleName}_v{$version}.tgz";
     $bundlePath = "/tmp/$bundleFilename";
 
@@ -81,6 +81,16 @@ function createBundleTarball($bundleName, $version) {
         return null;
     }
 
+    // Determine base source directory based on bundle type
+    $baseSourceDir = '/var/www/sample';  // Default to frontend
+    if (strpos($bundleName, 'backend') !== false) {
+        $baseSourceDir = "$homeDir/Cinemaniacs/serverBackend";
+    } elseif (strpos($bundleName, 'dmz') !== false) {
+        $baseSourceDir = "$homeDir/Cinemaniacs/dmz";
+    }
+
+    echo "[COMMUNICATOR] Using base source directory: $baseSourceDir\n";
+
     // Create temp build folder
     $buildDir = "/tmp/bundle_build_$bundleName";
     if (is_dir($buildDir)) {
@@ -90,9 +100,11 @@ function createBundleTarball($bundleName, $version) {
     echo "[COMMUNICATOR] Created temporary build folder: $buildDir\n";
 
     // Copy files based on config
-    foreach ($config['files'] as $sourcePath => $installTargetDir) {
-        if (!file_exists($sourcePath)) {
-            echo "[WARNING] Missing source file: $sourcePath\n";
+    foreach ($config['files'] as $sourceRelativePath => $installTargetDir) {
+        $fullSourcePath = rtrim($baseSourceDir, '/') . '/' . ltrim($sourceRelativePath, '/');
+
+        if (!file_exists($fullSourcePath)) {
+            echo "[WARNING] Missing source file: $fullSourcePath\n";
             continue;
         }
 
@@ -103,12 +115,12 @@ function createBundleTarball($bundleName, $version) {
             mkdir($targetFolder, 0777, true);
         }
 
-        $destinationFile = "$targetFolder/" . basename($sourcePath);
+        $destinationFile = "$targetFolder/" . basename($sourceRelativePath);
 
-        if (copy($sourcePath, $destinationFile)) {
-            echo "[COMMUNICATOR] Copied: $sourcePath -> $destinationFile\n";
+        if (copy($fullSourcePath, $destinationFile)) {
+            echo "[COMMUNICATOR] Copied: $fullSourcePath -> $destinationFile\n";
         } else {
-            echo "[ERROR] Failed to copy: $sourcePath\n";
+            echo "[ERROR] Failed to copy: $fullSourcePath\n";
         }
     }
 
@@ -137,8 +149,6 @@ function createBundleTarball($bundleName, $version) {
 
     return $bundlePath;
 }
-
-
 
 
 function registerBundleMetadata($bundleName, $version, $size) {
