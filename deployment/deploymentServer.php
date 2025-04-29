@@ -6,38 +6,9 @@ require_once('rabbitMQLib.inc');
 require_once('mysqlconnect.php');
 require_once('populateDB.php');
 
-//error_reporting(E_ALL);
-//ini_set('display_errors', 1);
-
 date_default_timezone_set("America/New_York");
 
-// === Action Functions ===
-function getNewBundles() {
-    global $mydb;
-    echo "[SERVER] Running getNewBundles()\n";
-
-    $stmt = $mydb->prepare("SELECT name, version FROM bundles WHERE status = 'new'");
-    $stmt->execute();
-    $result = $stmt->get_result();
-
-    $bundles = [];
-    while ($row = $result->fetch_assoc()) {
-        $bundles[] = $row;
-    }
-    return ['bundles' => $bundles];
-}
-
-function submitBundleResult($name, $version, $status) {
-    global $mydb;
-    echo "[SERVER] Running submitBundleResult()\n";
-
-    $stmt = $mydb->prepare("UPDATE bundles SET status = ? WHERE name = ? AND version = ?");
-    $stmt->bind_param("ssi", $status, $name, $version);
-    $stmt->execute();
-
-    return ["status" => "ok", "message" => "Bundle result updated"];
-}
-
+// === Action: Get latest version of any bundle by name ===
 function getLatestBundleAnyStatus($name) {
     global $mydb;
     echo "[SERVER] Running getLatestBundleAnyStatus()\n";
@@ -54,15 +25,16 @@ function getLatestBundleAnyStatus($name) {
     }
 }
 
+// === Action: Register new bundle ===
 function registerBundle($name, $version, $size) {
     global $mydb;
     echo "[SERVER] Running registerBundle()\n";
 
-    $status = 'new';  // Always new when registering
+    $status = 'new';
     $stmt = $mydb->prepare("INSERT INTO bundles (name, version, status, size) VALUES (?, ?, ?, ?)");
     $stmt->bind_param("sisi", $name, $version, $status, $size);
     $stmt->execute();
-    
+
     if ($stmt->affected_rows > 0) {
         echo "[SERVER] Bundle $name v$version registered successfully.\n";
         return ["status" => "ok", "message" => "Bundle registered"];
@@ -82,12 +54,6 @@ function requestProcessor($request) {
     }
 
     switch ($request['action']) {
-        case 'get_new_bundles':
-            return getNewBundles();
-
-        case 'bundle_result':
-            return submitBundleResult($request['name'], $request['version'], $request['status']);
-
         case 'get_latest_bundle_any_status':
             return getLatestBundleAnyStatus($request['name']);
 
