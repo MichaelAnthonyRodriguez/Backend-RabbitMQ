@@ -60,41 +60,86 @@ function getLatestVersionNumber($bundleName) {
     }
 }
 
-
 // === RabbitMQ Client Call: Create and send a bundle ===
-function createBundleTarball($type, $bundleName, $version) {
-    $sourceDirMap = [
-        'frontend' => '/var/www/sample',
-        'backend' => '/home/michael-anthony-rodriguez/RabbitMQ/serverBackend',
-        'dmz' => '/home/michael-anthony-rodriguez/RabbitMQ/dmz'
-    ];
-
-    if (!isset($sourceDirMap[$type])) {
-        echo "[ERROR] Invalid type '$type'\n";
-        return null;
-    }
-
-    $sourceDir = $sourceDirMap[$type];
-
-    if (!is_dir($sourceDir)) {
-        echo "[ERROR] Source directory does not exist: $sourceDir\n";
-        return null;
-    }
-
+function createBundleTarball($bundleName, $version) {
+    $homeDir = getenv('HOME');  // Still get home in case needed for dynamic paths
     $bundleFilename = "{$bundleName}_v{$version}.tgz";
     $bundlePath = "/tmp/$bundleFilename";
 
-    echo "[COMMUNICATOR] Creating tarball: $bundlePath\n";
+    echo "[COMMUNICATOR] === Building Bundle: $bundleName v$version ===\n";
 
-    shell_exec("tar -czf $bundlePath -C $sourceDir .");
-
-    if (!file_exists($bundlePath)) {
-        echo "[ERROR] Tarball creation failed.\n";
+    // Load config
+    $configPath = __DIR__ . "/configs/{$bundleName}.ini";
+    if (!file_exists($configPath)) {
+        echo "[ERROR] Config file not found: $configPath\n";
         return null;
     }
 
+    $config = parse_ini_file($configPath, true);
+    if (!$config || !isset($config['files'])) {
+        echo "[ERROR] Invalid config or missing [files] section.\n";
+        return null;
+    }
+
+    // Create temp build folder
+    $buildDir = "/tmp/bundle_build_$bundleName";
+    if (is_dir($buildDir)) {
+        shell_exec("rm -rf " . escapeshellarg($buildDir));
+    }
+    mkdir($buildDir, 0777, true);
+    echo "[COMMUNICATOR] Created temporary build folder: $buildDir\n";
+
+    // Copy files based on config
+    foreach ($config['files'] as $sourcePath => $installTargetDir) {
+        if (!file_exists($sourcePath)) {
+            echo "[WARNING] Missing source file: $sourcePath\n";
+            continue;
+        }
+
+        $relativeInstallPath = ltrim($installTargetDir, '/');  // Clean install path
+        $targetFolder = "$buildDir/$relativeInstallPath";
+
+        if (!is_dir($targetFolder)) {
+            mkdir($targetFolder, 0777, true);
+        }
+
+        $destinationFile = "$targetFolder/" . basename($sourcePath);
+
+        if (copy($sourcePath, $destinationFile)) {
+            echo "[COMMUNICATOR] Copied: $sourcePath -> $destinationFile\n";
+        } else {
+            echo "[ERROR] Failed to copy: $sourcePath\n";
+        }
+    }
+
+    // Copy config file into the bundle (as bundle.ini)
+    if (!copy($configPath, "$buildDir/bundle.ini")) {
+        echo "[ERROR] Failed to include config file inside bundle.\n";
+        return null;
+    }
+
+    echo "[COMMUNICATOR] Added bundle.ini to the bundle folder.\n";
+
+    // Create the tar.gz archive
+    $command = "tar -czf " . escapeshellarg($bundlePath) . " -C " . escapeshellarg($buildDir) . " .";
+    shell_exec($command);
+
+    if (!file_exists($bundlePath)) {
+        echo "[ERROR] Failed to create tarball.\n";
+        return null;
+    }
+
+    echo "[COMMUNICATOR] Tarball created successfully at: $bundlePath\n";
+
+    // Cleanup
+    shell_exec("rm -rf " . escapeshellarg($buildDir));
+    echo "[COMMUNICATOR] Cleaned up temporary build folder.\n";
+
     return $bundlePath;
 }
+
+
+
 
 function registerBundleMetadata($bundleName, $version, $size) {
     $client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
