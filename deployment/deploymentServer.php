@@ -50,19 +50,26 @@ function getLatestBundleAnyStatus($name) {
     if ($row = $result->fetch_assoc()) {
         return $row;
     } else {
-        return [];
+        return ["status" => "none", "message" => "No bundles found"];
     }
 }
 
-function registerBundle($name, $version, $status, $size) {
+function registerBundle($name, $version, $size) {
     global $mydb;
     echo "[SERVER] Running registerBundle()\n";
 
+    $status = 'new';  // Always new when registering
     $stmt = $mydb->prepare("INSERT INTO bundles (name, version, status, size) VALUES (?, ?, ?, ?)");
     $stmt->bind_param("sisi", $name, $version, $status, $size);
     $stmt->execute();
-    echo "[SERVER] Bundle registered\n";
-    return ["status" => "ok", "message" => "Bundle registered"];
+    
+    if ($stmt->affected_rows > 0) {
+        echo "[SERVER] Bundle $name v$version registered successfully.\n";
+        return ["status" => "ok", "message" => "Bundle registered"];
+    } else {
+        echo "[SERVER] Bundle registration failed.\n";
+        return ["status" => "error", "message" => "Failed to register bundle"];
+    }
 }
 
 // === Request Processor ===
@@ -71,24 +78,30 @@ function requestProcessor($request) {
     var_dump($request);
 
     if (!isset($request['action'])) {
-        return "ERROR: unsupported message type";
+        return ["status" => "error", "message" => "Unsupported message type"];
     }
 
     switch ($request['action']) {
         case 'get_new_bundles':
             return getNewBundles();
+
         case 'bundle_result':
             return submitBundleResult($request['name'], $request['version'], $request['status']);
+
         case 'get_latest_bundle_any_status':
             return getLatestBundleAnyStatus($request['name']);
+
         case 'register_bundle':
-            return registerBundle($request['name'], $request['version'], $request['status'], $request['size']);
+            return registerBundle($request['name'], $request['version'], $request['size']);
+
+        default:
+            echo "[SERVER] Unknown action received.\n";
+            return ["status" => "error", "message" => "Unknown action"];
     }
-    return ["returnCode" => '0', "message" => "Server received request and processed"];
 }
 
+// === Start Server ===
 $server = new rabbitMQServer("deploymentRabbitMQ.ini", "deploymentServer");
 echo "[SERVER] Deployment Server is starting..." . PHP_EOL;
 $server->process_requests("requestProcessor");
-
 ?>
