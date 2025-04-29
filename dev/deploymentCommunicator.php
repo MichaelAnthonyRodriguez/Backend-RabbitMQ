@@ -62,7 +62,7 @@ function getLatestVersionNumber($bundleName) {
 
 // === RabbitMQ Client Call: Create and send a bundle ===
 function createBundleTarball($bundleName, $version) {
-    $homeDir = getenv('HOME');  // Get the home directory dynamically
+    $homeDir = getenv('HOME');
     $bundleFilename = "{$bundleName}_v{$version}.tgz";
     $bundlePath = "/tmp/$bundleFilename";
 
@@ -81,7 +81,7 @@ function createBundleTarball($bundleName, $version) {
         return null;
     }
 
-    // Determine base source directory based on bundle type
+    // Determine base source directory
     $baseSourceDir = '/var/www/sample';  // Default to frontend
     if (strpos($bundleName, 'backend') !== false) {
         $baseSourceDir = "$homeDir/Cinemaniacs/serverBackend";
@@ -100,22 +100,22 @@ function createBundleTarball($bundleName, $version) {
     echo "[COMMUNICATOR] Created temporary build folder: $buildDir\n";
 
     // Copy files based on config
-    foreach ($config['files'] as $sourceRelativePath => $installTargetDir) {
-        $fullSourcePath = rtrim($baseSourceDir, '/') . '/' . ltrim($sourceRelativePath, '/');
+    foreach ($config['files'] as $fileName => $installDir) {
+        $fullSourcePath = rtrim($baseSourceDir, '/') . '/' . ltrim($fileName, '/');
 
         if (!file_exists($fullSourcePath)) {
             echo "[WARNING] Missing source file: $fullSourcePath\n";
             continue;
         }
 
-        $relativeInstallPath = ltrim($installTargetDir, '/');  // Clean install path
+        $relativeInstallPath = ltrim($installDir, '/');
         $targetFolder = "$buildDir/$relativeInstallPath";
 
         if (!is_dir($targetFolder)) {
             mkdir($targetFolder, 0777, true);
         }
 
-        $destinationFile = "$targetFolder/" . basename($sourceRelativePath);
+        $destinationFile = "$targetFolder/" . basename($fileName);
 
         if (copy($fullSourcePath, $destinationFile)) {
             echo "[COMMUNICATOR] Copied: $fullSourcePath -> $destinationFile\n";
@@ -124,15 +124,14 @@ function createBundleTarball($bundleName, $version) {
         }
     }
 
-    // Copy config file into the bundle (as bundle.ini)
+    // Copy config file into root of build folder
     if (!copy($configPath, "$buildDir/bundle.ini")) {
-        echo "[ERROR] Failed to include config file inside bundle.\n";
+        echo "[ERROR] Failed to copy bundle.ini into build folder.\n";
         return null;
     }
-
     echo "[COMMUNICATOR] Added bundle.ini to the bundle folder.\n";
 
-    // Create the tar.gz archive
+    // Create the tarball only from files you copied
     $command = "tar -czf " . escapeshellarg($bundlePath) . " -C " . escapeshellarg($buildDir) . " .";
     shell_exec($command);
 
@@ -149,6 +148,7 @@ function createBundleTarball($bundleName, $version) {
 
     return $bundlePath;
 }
+
 
 
 function registerBundleMetadata($bundleName, $version, $size) {
