@@ -81,16 +81,6 @@ function createBundleTarball($bundleName, $version) {
         return null;
     }
 
-    // Determine base source directory
-    $baseSourceDir = '/var/www/sample';  // Default frontend
-    if (strpos($bundleName, 'backend') !== false) {
-        $baseSourceDir = "$homeDir/Cinemaniacs/serverBackend";
-    } elseif (strpos($bundleName, 'dmz') !== false) {
-        $baseSourceDir = "$homeDir/Cinemaniacs/dmz";
-    }
-
-    echo "[COMMUNICATOR] Using base source directory: $baseSourceDir\n";
-
     // Create temp build folder
     $buildDir = "/tmp/bundle_build_$bundleName";
     if (is_dir($buildDir)) {
@@ -99,12 +89,12 @@ function createBundleTarball($bundleName, $version) {
     mkdir($buildDir, 0777, true);
     echo "[COMMUNICATOR] Created temporary build folder: $buildDir\n";
 
-    // Copy only individual files into root of buildDir
-    foreach ($config['files'] as $fileName => $ignoredInstallDir) {
-        $fullSourcePath = rtrim($baseSourceDir, '/') . '/' . ltrim($fileName, '/');
+    // Now correctly: copy each file FROM its [file]=folder mapping
+    foreach ($config['files'] as $fileName => $sourceFolder) {
+        $fullSourcePath = rtrim($sourceFolder, '/') . '/' . ltrim($fileName, '/');
 
         if (!file_exists($fullSourcePath)) {
-            echo "[WARNING] Missing source file: $fullSourcePath\n";
+            echo "[WARNING] Source file missing: $fullSourcePath\n";
             continue;
         }
 
@@ -117,30 +107,31 @@ function createBundleTarball($bundleName, $version) {
         }
     }
 
-    // Copy bundle.ini into root
+    // Copy bundle.ini itself into the root
     if (!copy($configPath, "$buildDir/bundle.ini")) {
-        echo "[ERROR] Failed to copy bundle.ini into build folder.\n";
+        echo "[ERROR] Failed to copy bundle.ini into bundle folder.\n";
         return null;
     }
     echo "[COMMUNICATOR] Added bundle.ini to bundle root.\n";
 
-    // Create tar.gz from only the files, no folders
+    // Create tar.gz
     $command = "tar -czf " . escapeshellarg($bundlePath) . " -C " . escapeshellarg($buildDir) . " .";
     shell_exec($command);
 
     if (!file_exists($bundlePath)) {
-        echo "[ERROR] Failed to create tarball.\n";
+        echo "[ERROR] Tarball creation failed.\n";
         return null;
     }
 
     echo "[COMMUNICATOR] Tarball created successfully at: $bundlePath\n";
 
-    // Cleanup
+    // Cleanup build folder
     shell_exec("rm -rf " . escapeshellarg($buildDir));
     echo "[COMMUNICATOR] Cleaned up temporary build folder.\n";
 
     return $bundlePath;
 }
+
 
 
 function registerBundleMetadata($bundleName, $version, $size) {
