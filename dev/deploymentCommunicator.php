@@ -82,7 +82,7 @@ function createBundleTarball($bundleName, $version) {
     }
 
     // Determine base source directory
-    $baseSourceDir = '/var/www/sample';  // Default to frontend
+    $baseSourceDir = '/var/www/sample';  // Default frontend
     if (strpos($bundleName, 'backend') !== false) {
         $baseSourceDir = "$homeDir/Cinemaniacs/serverBackend";
     } elseif (strpos($bundleName, 'dmz') !== false) {
@@ -99,8 +99,8 @@ function createBundleTarball($bundleName, $version) {
     mkdir($buildDir, 0777, true);
     echo "[COMMUNICATOR] Created temporary build folder: $buildDir\n";
 
-    // Copy files based on config
-    foreach ($config['files'] as $fileName => $installDir) {
+    // Copy only individual files into root of buildDir
+    foreach ($config['files'] as $fileName => $ignoredInstallDir) {
         $fullSourcePath = rtrim($baseSourceDir, '/') . '/' . ltrim($fileName, '/');
 
         if (!file_exists($fullSourcePath)) {
@@ -108,14 +108,7 @@ function createBundleTarball($bundleName, $version) {
             continue;
         }
 
-        $relativeInstallPath = ltrim($installDir, '/');
-        $targetFolder = "$buildDir/$relativeInstallPath";
-
-        if (!is_dir($targetFolder)) {
-            mkdir($targetFolder, 0777, true);
-        }
-
-        $destinationFile = "$targetFolder/" . basename($fileName);
+        $destinationFile = "$buildDir/" . basename($fileName);
 
         if (copy($fullSourcePath, $destinationFile)) {
             echo "[COMMUNICATOR] Copied: $fullSourcePath -> $destinationFile\n";
@@ -124,14 +117,14 @@ function createBundleTarball($bundleName, $version) {
         }
     }
 
-    // Copy config file into root of build folder
+    // Copy bundle.ini into root
     if (!copy($configPath, "$buildDir/bundle.ini")) {
         echo "[ERROR] Failed to copy bundle.ini into build folder.\n";
         return null;
     }
-    echo "[COMMUNICATOR] Added bundle.ini to the bundle folder.\n";
+    echo "[COMMUNICATOR] Added bundle.ini to bundle root.\n";
 
-    // Create the tarball only from files you copied
+    // Create tar.gz from only the files, no folders
     $command = "tar -czf " . escapeshellarg($bundlePath) . " -C " . escapeshellarg($buildDir) . " .";
     shell_exec($command);
 
@@ -148,7 +141,6 @@ function createBundleTarball($bundleName, $version) {
 
     return $bundlePath;
 }
-
 
 
 function registerBundleMetadata($bundleName, $version, $size) {
