@@ -79,6 +79,18 @@ function registerVmIp($env, $role, $ip) {
     }
 }
 
+function sendSshKeyToVm($env, $role) {
+    $publicKey = file_get_contents('/home/michael-anthony-rodriguez/.ssh/id_rsa.pub');
+    $client = new rabbitMQClient("vm.ini", "{$env}.{$role}");
+
+    $client->publish([
+        'action' => 'install_ssh_key',
+        'key' => $publicKey
+    ]);
+
+    echo "[DEPLOYMENT] Sent SSH key to $env.$role\n";
+}
+
 
 // === Request Processor ===
 function requestProcessor($request) {
@@ -92,17 +104,20 @@ function requestProcessor($request) {
     switch ($request['action']) {
         case 'get_latest_bundle_any_status':
             return getLatestBundleAnyStatus($request['name']);
-
+    
         case 'register_bundle':
             return registerBundle($request['name'], $request['version'], $request['size']);
-
+    
         case 'register_vm_ip':
             return registerVmIp($request['env'], $request['role'], $request['ip']);
-
+    
+        case 'push_ssh_key':
+            return sendSshKeyToVm($request['env'], $request['role'], $request['key']);
+    
         default:
-            echo "[SERVER] Unknown action received.\n";
             return ["status" => "error", "message" => "Unknown action"];
     }
+    
 }
 
 

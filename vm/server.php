@@ -30,6 +30,7 @@ $client->publish([
     'ip' => $ip
 ]);
 
+//install bundle from deployment
 function installBundle($bundleName, $version) {
     echo "[VM SERVER] installBundle() called for $bundleName v$version\n";
 
@@ -41,7 +42,31 @@ function installBundle($bundleName, $version) {
     ];
 }
 
- 
+//get ssh key from deployment server for scp
+function installSshKey($publicKey) {
+    $home = getenv("HOME");
+    $sshDir = "$home/.ssh";
+    $authKeys = "$sshDir/authorized_keys";
+
+    if (!is_dir($sshDir)) {
+        mkdir($sshDir, 0700, true);
+        echo "[VM SERVER] Created ~/.ssh directory\n";
+    }
+
+    // Append key if it's not already present
+    if (strpos(@file_get_contents($authKeys), trim($publicKey)) === false) {
+        file_put_contents($authKeys, trim($publicKey) . "\n", FILE_APPEND | LOCK_EX);
+        chmod($authKeys, 0600);
+        chown($authKeys, get_current_user());
+        echo "[VM SERVER] Public key added to authorized_keys\n";
+        return ["status" => "ok", "message" => "SSH key installed"];
+    } else {
+        echo "[VM SERVER] Key already present\n";
+        return ["status" => "noop", "message" => "Key already exists"];
+    }
+}
+
+
 // === Request Processor ===
 function requestProcessor($request) {
     echo "[VM SERVER] Processing request...\n";
@@ -55,6 +80,9 @@ function requestProcessor($request) {
         case 'install_bundle':
             return installBundle($request['bundle'], $request['version']);
 
+        case 'install_ssh_key':
+            return installSshKey($request['key']);
+            
         default:
             echo "[VM SERVER] Unknown action received.\n";
             return ["status" => "error", "message" => "Unknown action"];
