@@ -18,7 +18,7 @@ if (!$env || !$role) {
 $section = "{$env}.{$role}";
 echo "[VM SERVER] Starting listener for: $section using vm.ini\n";
 
-// === Send VM IP to Deployment Server ===
+// === Report VM IP to Deployment Server ===
 $ip = getHostByName(getHostName());
 echo "[VM SERVER] Reporting IP to deployment server: $ip\n";
 
@@ -30,19 +30,18 @@ $client->publish([
     'ip' => $ip
 ]);
 
-//install bundle from deployment
+// === Function: Install bundle from deployment
 function installBundle($bundleName, $version) {
     echo "[VM SERVER] installBundle() called for $bundleName v$version\n";
 
-    // TODO: Implement SCP + extraction + systemd bounce logic here
-    // For now, just acknowledge it
+    // TODO: Add SCP + extract + systemctl restart logic here
     return [
         "status" => "ok",
         "message" => "Install triggered for $bundleName v$version"
     ];
 }
 
-//get ssh key from deployment server for scp
+// === Function: Accept and write public SSH key
 function installSshKey($publicKey) {
     $home = getenv("HOME");
     $sshDir = "$home/.ssh";
@@ -53,7 +52,6 @@ function installSshKey($publicKey) {
         echo "[VM SERVER] Created ~/.ssh directory\n";
     }
 
-    // Append key if it's not already present
     if (strpos(@file_get_contents($authKeys), trim($publicKey)) === false) {
         file_put_contents($authKeys, trim($publicKey) . "\n", FILE_APPEND | LOCK_EX);
         chmod($authKeys, 0600);
@@ -65,7 +63,6 @@ function installSshKey($publicKey) {
         return ["status" => "noop", "message" => "Key already exists"];
     }
 }
-
 
 // === Request Processor ===
 function requestProcessor($request) {
@@ -82,15 +79,14 @@ function requestProcessor($request) {
 
         case 'install_ssh_key':
             return installSshKey($request['key']);
-            
+
         default:
             echo "[VM SERVER] Unknown action received.\n";
             return ["status" => "error", "message" => "Unknown action"];
     }
 }
 
-
-// === Start VM Server ===
+// === Start RabbitMQ Listener for This Role ===
 $server = new rabbitMQServer("vm.ini", $section);
 $server->process_requests("requestProcessor");
 ?>

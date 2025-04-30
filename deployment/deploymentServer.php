@@ -72,7 +72,11 @@ function registerVmIp($env, $role, $ip) {
 
     if ($stmt->affected_rows > 0) {
         echo "[SERVER] IP updated for $env.$role\n";
-        return ["status" => "ok", "message" => "IP registered"];
+
+        // 🚀 Trigger SSH key installation to that VM
+        sendSshKeyToVm($env, $role);
+
+        return ["status" => "ok", "message" => "IP registered + SSH key sent"];
     } else {
         echo "[SERVER] No change to IP for $env.$role\n";
         return ["status" => "noop", "message" => "IP unchanged"];
@@ -90,7 +94,6 @@ function sendSshKeyToVm($env, $role) {
 
     echo "[DEPLOYMENT] Sent SSH key to $env.$role\n";
 }
-
 
 // === Request Processor ===
 function requestProcessor($request) {
