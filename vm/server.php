@@ -18,10 +18,11 @@ if (!$env || !$role) {
 $section = "{$env}.{$role}";
 echo "[VM SERVER] Starting listener for: $section using vm.ini\n";
 
-// === Report VM IP to Deployment Server ===
-$ip = getHostByName(getHostName());
-echo "[VM SERVER] Reporting IP to deployment server: $ip\n";
+// === Get Tailscale IP ===
+$ip = trim(shell_exec("tailscale ip | head -n 1"));
+echo "[VM SERVER] Reporting Tailscale IP to deployment server: $ip\n";
 
+// === Report IP to Deployment Server ===
 $client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
 $client->publish([
     'action' => 'register_vm_ip',
@@ -29,20 +30,18 @@ $client->publish([
     'role' => $role,
     'ip' => $ip
 ]);
-echo "[VM SERVER] IP Reported: $ip\n";
 
-// === Function: Install bundle from deployment
+// === Handle Bundle Installation ===
 function installBundle($bundleName, $version) {
     echo "[VM SERVER] installBundle() called for $bundleName v$version\n";
-
-    // TODO: Add SCP + extract + systemctl restart logic here
+    // TODO: Implement SCP + extract + restart logic
     return [
         "status" => "ok",
         "message" => "Install triggered for $bundleName v$version"
     ];
 }
 
-// === Function: Accept and write public SSH key
+// === Handle SSH Key Installation ===
 function installSshKey($publicKey) {
     $home = getenv("HOME");
     $sshDir = "$home/.ssh";
@@ -87,7 +86,6 @@ function requestProcessor($request) {
     }
 }
 
-// === Start RabbitMQ Listener for This Role ===
+// === Start RabbitMQ Server Listener ===
 $server = new rabbitMQServer("vm.ini", $section);
 $server->process_requests("requestProcessor");
-?>
