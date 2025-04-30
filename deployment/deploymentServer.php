@@ -25,6 +25,24 @@ function getLatestBundleAnyStatus($name) {
     }
 }
 
+//get latest bundle marked new/passed
+function getLatestBundleByStatus($name, $status) {
+    global $mydb;
+    echo "[SERVER] Running getLatestBundleByStatus() for $name with status '$status'\n";
+
+    $stmt = $mydb->prepare("SELECT name, version, status, size FROM bundles WHERE name = ? AND status = ? ORDER BY version DESC LIMIT 1");
+    $stmt->bind_param("ss", $name, $status);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    if ($row = $result->fetch_assoc()) {
+        return $row;
+    } else {
+        return ["status" => "none", "message" => "No bundle with status '$status' found"];
+    }
+}
+
+
 // === Action: Register new bundle ===
 function registerBundle($name, $version, $size) {
     global $mydb;
@@ -169,6 +187,9 @@ function requestProcessor($request) {
     switch ($request['action']) {
         case 'get_latest_bundle_any_status':
             return getLatestBundleAnyStatus($request['name']);
+            
+        case 'get_latest_bundle_by_status':
+            return getLatestBundleByStatus($request['name'], $request['status']);            
 
         case 'register_bundle':
             return registerBundle($request['name'], $request['version'], $request['size']);
