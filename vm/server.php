@@ -29,6 +29,7 @@ $client->publish([
     'role' => $role,
     'ip' => $ip
 ]);
+echo "[VM SERVER] IP Reported: $ip\n";
 
 // === Function: Install bundle from deployment
 function installBundle($bundleName, $version) {
