@@ -173,7 +173,7 @@ function triggerInstallOnVm($env, $role, $bundleName, $status = 'new') {
         'action' => 'deploy_bundle_to_vm',
         'env'    => $env,
         'role'   => $role,
-        'name'   => $bundleName,
+        'bundleName'   => $bundleName,
         'status' => $status
     ]);
 
