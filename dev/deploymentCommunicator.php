@@ -167,33 +167,18 @@ function registerBundleMetadata($bundleName, $version, $size) {
 function triggerInstallOnVm($env, $role, $bundleName, $status = 'new') {
     $client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
 
-    echo "[COMMUNICATOR] Requesting latest '$status' version of bundle '$bundleName' from deployment server...\n";
+    echo "[COMMUNICATOR] Instructing deployment server to deploy bundle '$bundleName' (status: $status) to $env.$role\n";
 
     $response = $client->send_request([
-        'action' => 'get_latest_bundle_by_status',
-        'name' => $bundleName,
+        'action' => 'deploy_bundle_to_vm',
+        'env'    => $env,
+        'role'   => $role,
+        'name'   => $bundleName,
         'status' => $status
     ]);
 
-    if (!isset($response['version'])) {
-        echo "[ERROR] No bundle found with status '$status' for '$bundleName'.\n";
-        return;
-    }
-
-    $version = (int)$response['version'];
-
-    echo "[COMMUNICATOR] Triggering install on $env.$role for $bundleName v$version...\n";
-
-    $vmClient = new rabbitMQClient("vm.ini", "$env.$role");
-
-    $vmResponse = $vmClient->send_request([
-        'action' => 'install_bundle',
-        'bundle' => $bundleName,
-        'version' => $version
-    ]);
-
-    echo "[COMMUNICATOR] VM response:\n";
-    print_r($vmResponse);
+    echo "[COMMUNICATOR] Deployment server response:\n";
+    print_r($response);
 }
 
 

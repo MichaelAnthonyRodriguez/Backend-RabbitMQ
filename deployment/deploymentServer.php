@@ -25,24 +25,6 @@ function getLatestBundleAnyStatus($name) {
     }
 }
 
-//get latest bundle marked new/passed
-function getLatestBundleByStatus($name, $status) {
-    global $mydb;
-    echo "[SERVER] Running getLatestBundleByStatus() for $name with status '$status'\n";
-
-    $stmt = $mydb->prepare("SELECT name, version, status, size FROM bundles WHERE name = ? AND status = ? ORDER BY version DESC LIMIT 1");
-    $stmt->bind_param("ss", $name, $status);
-    $stmt->execute();
-    $result = $stmt->get_result();
-
-    if ($row = $result->fetch_assoc()) {
-        return $row;
-    } else {
-        return ["status" => "none", "message" => "No bundle with status '$status' found"];
-    }
-}
-
-
 // === Action: Register new bundle ===
 function registerBundle($name, $version, $size) {
     global $mydb;
@@ -135,6 +117,11 @@ function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
     $filename = "{$bundleName}_v{$version}.tgz";
     $localPath = "/home/michael-anthony-rodriguez/bundles/$filename";
 
+    if (!file_exists($localPath)) {
+        echo "[DEPLOYMENT] Bundle file not found: $localPath\n";
+        return ["status" => "error", "message" => "Local bundle file missing"];
+    }
+
     echo "[DEPLOYMENT] Found bundle version $version\n";
 
     // Get VM IP
@@ -152,9 +139,8 @@ function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
     $vmIp = $ipRow['ip'];
     $targetPath = "/tmp/$filename";
 
-    // SCP the bundle
     echo "[DEPLOYMENT] SCPing bundle to $vmIp...\n";
-    $scpCommand = "scp $localPath michael-anthony-rodriguez@$vmIp:$targetPath 2>&1";
+    $scpCommand = "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $localPath michael-anthony-rodriguez@$vmIp:$targetPath 2>&1";
     $scpOutput = shell_exec($scpCommand);
     echo "[SCP OUTPUT]\n$scpOutput\n";
 
@@ -162,7 +148,7 @@ function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
         return ["status" => "error", "message" => "SCP failed: $scpOutput"];
     }
 
-    // Send install command
+    // Send install command to VM
     $client = new rabbitMQClient("vm.ini", "$env.$role");
     $response = $client->send_request([
         'action' => 'install_bundle',
@@ -173,6 +159,7 @@ function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
     echo "[DEPLOYMENT] Install triggered on $env.$role for $bundleName v$version\n";
     return $response;
 }
+
 
 
 // === Request Processor ===
@@ -186,10 +173,7 @@ function requestProcessor($request) {
 
     switch ($request['action']) {
         case 'get_latest_bundle_any_status':
-            return getLatestBundleAnyStatus($request['name']);
-            
-        case 'get_latest_bundle_by_status':
-            return getLatestBundleByStatus($request['name'], $request['status']);            
+            return getLatestBundleAnyStatus($request['name']);        
 
         case 'register_bundle':
             return registerBundle($request['name'], $request['version'], $request['size']);
@@ -200,7 +184,7 @@ function requestProcessor($request) {
         case 'push_ssh_key':
             return sendSshKeyToVm($request['env'], $request['role'], $request['key']);
 
-        case 'deploy_bundle_to_vm': // ✅ Add this line
+        case 'deploy_bundle_to_vm':
             return deployBundleToVm($request['env'], $request['role'], $request['bundle'], $request['status']);
 
         default:
