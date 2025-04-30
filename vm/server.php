@@ -34,12 +34,74 @@ $client->publish([
 // === Handle Bundle Installation ===
 function installBundle($bundleName, $version) {
     echo "[VM SERVER] installBundle() called for $bundleName v$version\n";
-    // TODO: Implement SCP + extract + restart logic
-    return [
-        "status" => "ok",
-        "message" => "Install triggered for $bundleName v$version"
-    ];
+
+    $filename = "{$bundleName}_v{$version}.tgz";
+    $remotePath = "/home/michael-anthony-rodriguez/bundles/$filename";
+    $localTmp = "/tmp/$filename";
+    $extractDir = "/tmp/{$bundleName}_install";
+
+    // 1. SCP the file from deployment
+    $scpCommand = "scp michael-anthony-rodriguez@100.105.162.20:$remotePath $localTmp 2>&1";
+    $output = shell_exec($scpCommand);
+
+    if (!file_exists($localTmp)) {
+        echo "[ERROR] SCP failed: $output\n";
+        return ["status" => "error", "message" => "Failed to download bundle"];
+    }
+    echo "[VM SERVER] Bundle downloaded to $localTmp\n";
+
+    // 2. Extract the tarball
+    shell_exec("rm -rf " . escapeshellarg($extractDir));
+    mkdir($extractDir, 0777, true);
+    shell_exec("tar -xzf " . escapeshellarg($localTmp) . " -C " . escapeshellarg($extractDir));
+    echo "[VM SERVER] Bundle extracted to $extractDir\n";
+
+    // 3. Parse bundle.ini
+    $iniPath = "$extractDir/bundle.ini";
+    if (!file_exists($iniPath)) {
+        return ["status" => "error", "message" => "Missing bundle.ini"];
+    }
+    $config = parse_ini_file($iniPath, true);
+    if (!$config || !isset($config['files'])) {
+        return ["status" => "error", "message" => "Invalid bundle.ini"];
+    }
+
+    // 4. Copy each file to target path
+    foreach ($config['files'] as $filename => $targetDir) {
+        $source = "$extractDir/" . basename($filename);
+        $dest = rtrim($targetDir, '/') . '/' . basename($filename);
+
+        if (!file_exists($source)) {
+            echo "[WARNING] Source file missing: $source\n";
+            continue;
+        }
+
+        if (!is_dir(dirname($dest))) {
+            mkdir(dirname($dest), 0755, true);
+        }
+
+        if (copy($source, $dest)) {
+            echo "[VM SERVER] Installed: $filename -> $dest\n";
+        } else {
+            echo "[ERROR] Failed to copy $filename\n";
+        }
+    }
+
+    // 5. Restart processes from [restart]
+    if (isset($config['restart'])) {
+        foreach ($config['restart'] as $label => $service) {
+            echo "[VM SERVER] Restarting: $service\n";
+            shell_exec("sudo systemctl restart " . escapeshellarg($service));
+        }
+    }
+
+    // 6. Cleanup
+    unlink($localTmp);
+    shell_exec("rm -rf " . escapeshellarg($extractDir));
+
+    return ["status" => "ok", "message" => "Bundle installed successfully"];
 }
+
 
 // === Handle SSH Key Installation ===
 function installSshKey($publicKey) {
