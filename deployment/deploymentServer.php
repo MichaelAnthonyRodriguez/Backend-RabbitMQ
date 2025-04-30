@@ -185,7 +185,7 @@ function requestProcessor($request) {
             return sendSshKeyToVm($request['env'], $request['role'], $request['key']);
 
         case 'deploy_bundle_to_vm':
-            return deployBundleToVm($request['env'], $request['role'], $request['bundle'], $request['status']);
+            return deployBundleToVm($request['env'], $request['role'], $request['bundleName'], $request['status']);
 
         default:
             return ["status" => "error", "message" => "Unknown action"];
