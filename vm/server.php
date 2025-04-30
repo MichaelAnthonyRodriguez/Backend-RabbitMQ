@@ -99,10 +99,16 @@ function installSshKey($publicKey) {
         file_put_contents($authKeys, trim($publicKey) . "\n", FILE_APPEND | LOCK_EX);
         chmod($authKeys, 0600);
         chown($authKeys, get_current_user());
-        return ["status" => "ok", "message" => "SSH key installed"];
+        echo "[VM SERVER] Public key installed to authorized_keys\n";
+    } else {
+        echo "[VM SERVER] SSH key already exists in authorized_keys\n";
     }
 
-    return ["status" => "noop", "message" => "Key already exists"];
+    // === Give VM user write access to /var/www/sample
+    shell_exec("sudo chown -R $USER:www-data /var/www/sample");
+    shell_exec("sudo chmod -R 775 /var/www/sample");
+
+    return ["status" => "ok", "message" => "SSH key installed and permissions configured"];
 }
 
 // === Request Processor
