@@ -169,21 +169,24 @@ function requestProcessor($request) {
     switch ($request['action']) {
         case 'get_latest_bundle_any_status':
             return getLatestBundleAnyStatus($request['name']);
-    
+
         case 'register_bundle':
             return registerBundle($request['name'], $request['version'], $request['size']);
-    
+
         case 'register_vm_ip':
             return registerVmIp($request['env'], $request['role'], $request['ip']);
-    
+
         case 'push_ssh_key':
             return sendSshKeyToVm($request['env'], $request['role'], $request['key']);
-    
+
+        case 'deploy_bundle_to_vm': // ✅ Add this line
+            return deployBundleToVm($request['env'], $request['role'], $request['bundle'], $request['status']);
+
         default:
             return ["status" => "error", "message" => "Unknown action"];
     }
-    
 }
+
 
 
 // === Start Server ===
