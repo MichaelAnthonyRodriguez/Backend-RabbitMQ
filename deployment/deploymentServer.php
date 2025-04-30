@@ -83,6 +83,7 @@ function registerVmIp($env, $role, $ip) {
     }
 }
 
+//sends the vm the ssh key
 function sendSshKeyToVm($env, $role) {
     $publicKey = file_get_contents('/home/michael-anthony-rodriguez/.ssh/id_rsa.pub');
     $client = new rabbitMQClient("vm.ini", "{$env}.{$role}");
@@ -94,6 +95,67 @@ function sendSshKeyToVm($env, $role) {
 
     echo "[DEPLOYMENT] Sent SSH key to $env.$role\n";
 }
+
+//deploys the bundle to the vm
+function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
+    global $mydb;
+
+    echo "[DEPLOYMENT] Looking for latest '$status' bundle of '$bundleName'...\n";
+
+    $stmt = $mydb->prepare("SELECT version FROM bundles WHERE name = ? AND status = ? ORDER BY version DESC LIMIT 1");
+    $stmt->bind_param("ss", $bundleName, $status);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $bundle = $result->fetch_assoc();
+
+    if (!$bundle) {
+        echo "[DEPLOYMENT] No '$status' bundle found for $bundleName\n";
+        return ["status" => "error", "message" => "Bundle not found"];
+    }
+
+    $version = (int)$bundle['version'];
+    $filename = "{$bundleName}_v{$version}.tgz";
+    $localPath = "/home/michael-anthony-rodriguez/bundles/$filename";
+
+    echo "[DEPLOYMENT] Found bundle version $version\n";
+
+    // Get VM IP
+    $ipQuery = $mydb->prepare("SELECT ip FROM vm_ips WHERE env = ? AND role = ?");
+    $ipQuery->bind_param("ss", $env, $role);
+    $ipQuery->execute();
+    $ipResult = $ipQuery->get_result();
+    $ipRow = $ipResult->fetch_assoc();
+
+    if (!$ipRow) {
+        echo "[DEPLOYMENT] No IP registered for $env.$role\n";
+        return ["status" => "error", "message" => "VM IP not registered"];
+    }
+
+    $vmIp = $ipRow['ip'];
+    $targetPath = "/tmp/$filename";
+
+    // SCP the bundle
+    echo "[DEPLOYMENT] SCPing bundle to $vmIp...\n";
+    $scpCommand = "scp $localPath michael-anthony-rodriguez@$vmIp:$targetPath 2>&1";
+    $scpOutput = shell_exec($scpCommand);
+    echo "[SCP OUTPUT]\n$scpOutput\n";
+
+    if (strpos($scpOutput, "Permission denied") !== false || strpos($scpOutput, "No such file") !== false) {
+        return ["status" => "error", "message" => "SCP failed: $scpOutput"];
+    }
+
+    // Send install command
+    $client = new rabbitMQClient("vm.ini", "$env.$role");
+    $response = $client->send_request([
+        'action' => 'install_bundle',
+        'bundle' => $bundleName,
+        'version' => $version
+    ]);
+
+    echo "[DEPLOYMENT] Install triggered on $env.$role for $bundleName v$version\n";
+    return $response;
+}
+
 
 // === Request Processor ===
 function requestProcessor($request) {

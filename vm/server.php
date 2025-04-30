@@ -31,7 +31,7 @@ $client->publish([
     'ip' => $ip
 ]);
 
-// === Handle Bundle Installation ===
+// === Install Bundle
 function installBundle($bundleName, $version) {
     echo "[VM SERVER] installBundle() called for $bundleName v$version\n";
 
@@ -40,70 +40,52 @@ function installBundle($bundleName, $version) {
     $localTmp = "/tmp/$filename";
     $extractDir = "/tmp/{$bundleName}_install";
 
-    // 1. SCP the file from deployment
-    $scpCommand = "scp michael-anthony-rodriguez@100.105.162.20:$remotePath $localTmp 2>&1";
-    $output = shell_exec($scpCommand);
+    $scp = "scp michael-anthony-rodriguez@100.105.162.20:$remotePath $localTmp 2>&1";
+    $output = shell_exec($scp);
 
     if (!file_exists($localTmp)) {
-        echo "[ERROR] SCP failed: $output\n";
-        return ["status" => "error", "message" => "Failed to download bundle"];
+        return ["status" => "error", "message" => "SCP failed: $output"];
     }
-    echo "[VM SERVER] Bundle downloaded to $localTmp\n";
 
-    // 2. Extract the tarball
     shell_exec("rm -rf " . escapeshellarg($extractDir));
     mkdir($extractDir, 0777, true);
     shell_exec("tar -xzf " . escapeshellarg($localTmp) . " -C " . escapeshellarg($extractDir));
-    echo "[VM SERVER] Bundle extracted to $extractDir\n";
 
-    // 3. Parse bundle.ini
     $iniPath = "$extractDir/bundle.ini";
     if (!file_exists($iniPath)) {
         return ["status" => "error", "message" => "Missing bundle.ini"];
     }
+
     $config = parse_ini_file($iniPath, true);
     if (!$config || !isset($config['files'])) {
         return ["status" => "error", "message" => "Invalid bundle.ini"];
     }
 
-    // 4. Copy each file to target path
     foreach ($config['files'] as $filename => $targetDir) {
         $source = "$extractDir/" . basename($filename);
         $dest = rtrim($targetDir, '/') . '/' . basename($filename);
 
-        if (!file_exists($source)) {
-            echo "[WARNING] Source file missing: $source\n";
-            continue;
-        }
-
-        if (!is_dir(dirname($dest))) {
-            mkdir(dirname($dest), 0755, true);
-        }
-
-        if (copy($source, $dest)) {
-            echo "[VM SERVER] Installed: $filename -> $dest\n";
-        } else {
-            echo "[ERROR] Failed to copy $filename\n";
+        if (file_exists($source)) {
+            if (!is_dir(dirname($dest))) {
+                mkdir(dirname($dest), 0755, true);
+            }
+            copy($source, $dest);
         }
     }
 
-    // 5. Restart processes from [restart]
     if (isset($config['restart'])) {
         foreach ($config['restart'] as $label => $service) {
-            echo "[VM SERVER] Restarting: $service\n";
             shell_exec("sudo systemctl restart " . escapeshellarg($service));
         }
     }
 
-    // 6. Cleanup
     unlink($localTmp);
     shell_exec("rm -rf " . escapeshellarg($extractDir));
 
-    return ["status" => "ok", "message" => "Bundle installed successfully"];
+    return ["status" => "ok", "message" => "Bundle installed"];
 }
 
-
-// === Handle SSH Key Installation ===
+// === SSH Key Installer
 function installSshKey($publicKey) {
     $home = getenv("HOME");
     $sshDir = "$home/.ssh";
@@ -111,43 +93,29 @@ function installSshKey($publicKey) {
 
     if (!is_dir($sshDir)) {
         mkdir($sshDir, 0700, true);
-        echo "[VM SERVER] Created ~/.ssh directory\n";
     }
 
     if (strpos(@file_get_contents($authKeys), trim($publicKey)) === false) {
         file_put_contents($authKeys, trim($publicKey) . "\n", FILE_APPEND | LOCK_EX);
         chmod($authKeys, 0600);
         chown($authKeys, get_current_user());
-        echo "[VM SERVER] Public key added to authorized_keys\n";
         return ["status" => "ok", "message" => "SSH key installed"];
-    } else {
-        echo "[VM SERVER] Key already present\n";
-        return ["status" => "noop", "message" => "Key already exists"];
     }
+
+    return ["status" => "noop", "message" => "Key already exists"];
 }
 
-// === Request Processor ===
+// === Request Processor
 function requestProcessor($request) {
-    echo "[VM SERVER] Processing request...\n";
-    var_dump($request);
-
-    if (!isset($request['action'])) {
-        return ["status" => "error", "message" => "Unsupported message type"];
-    }
-
     switch ($request['action']) {
         case 'install_bundle':
-            return installBundle($request['bundle'], $request['version']);
-
+            return installBundle($request['bundle'], $request['version']);        
         case 'install_ssh_key':
             return installSshKey($request['key']);
-
         default:
-            echo "[VM SERVER] Unknown action received.\n";
             return ["status" => "error", "message" => "Unknown action"];
     }
 }
 
-// === Start RabbitMQ Server Listener ===
 $server = new rabbitMQServer("vm.ini", $section);
 $server->process_requests("requestProcessor");

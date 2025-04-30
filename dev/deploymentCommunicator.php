@@ -29,6 +29,29 @@ function getLatestVersionNumber($bundleName) {
     }
 }
 
+//get latest new or passed bundle
+function getLatestBundleByStatus($bundleName, $status = 'new') {
+    $client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
+
+    $response = $client->send_request([
+        'action' => 'get_latest_bundle_any_status',
+        'name' => $bundleName
+    ]);
+
+    if (!isset($response['version']) || !isset($response['status'])) {
+        echo "[ERROR] No bundles found for $bundleName\n";
+        return null;
+    }
+
+    if ($response['status'] !== $status) {
+        echo "[ERROR] Latest bundle is not marked as '$status'\n";
+        return null;
+    }
+
+    return (int)$response['version'];
+}
+
+
 // === Build bundle tarball from config ===
 function createBundleTarball($bundleName, $version) {
     $homeDir = getenv('HOME');
@@ -140,11 +163,66 @@ function registerBundleMetadata($bundleName, $version, $size) {
     }
 }
 
+// === Trigger bundle install on VM ===
+function triggerInstallOnVm($env, $role, $bundleName, $status = 'new') {
+    $client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
+
+    echo "[COMMUNICATOR] Requesting latest '$status' version of bundle '$bundleName' from deployment server...\n";
+
+    $response = $client->send_request([
+        'action' => 'get_latest_bundle_by_status',
+        'name' => $bundleName,
+        'status' => $status
+    ]);
+
+    if (!isset($response['version'])) {
+        echo "[ERROR] No bundle found with status '$status' for '$bundleName'.\n";
+        return;
+    }
+
+    $version = (int)$response['version'];
+
+    echo "[COMMUNICATOR] Triggering install on $env.$role for $bundleName v$version...\n";
+
+    $vmClient = new rabbitMQClient("vm.ini", "$env.$role");
+
+    $vmResponse = $vmClient->send_request([
+        'action' => 'install_bundle',
+        'bundle' => $bundleName,
+        'version' => $version
+    ]);
+
+    echo "[COMMUNICATOR] VM response:\n";
+    print_r($vmResponse);
+}
+
+
 // === CLI Entry Point ===
 if (php_sapi_name() === 'cli') {
     $cmd = $argv[1] ?? null;
 
     switch ($cmd) {
+        //installs bundle to vm specified by QA/PROD FRONTEND/BACKEND/DMZ BUNDLE_NAME NEW/PASSED
+        case "install_bundle":
+            if (isset($argv[2], $argv[3], $argv[4], $argv[5])) {
+                $env = $argv[2];
+                $role = $argv[3];
+                $bundleName = $argv[4];
+                $statusType = strtolower($argv[5]);
+        
+                if (!in_array($statusType, ['new', 'passed'])) {
+                    echo "[ERROR] Invalid status type. Use 'new' or 'passed'.\n";
+                    exit(1);
+                }
+        
+                triggerInstallOnVm($env, $role, $bundleName, $statusType);
+                exit(0);
+            } else {
+                echo "Usage: php deploymentCommunicator.php install_bundle <QA|PROD> <role> <bundleName> <new|passed>\n";
+                exit(1);
+            }
+                    
+        //creates a new bundle by name     
         case "create_bundle":
             if (isset($argv[2])) {
                 $bundleName = $argv[2];
