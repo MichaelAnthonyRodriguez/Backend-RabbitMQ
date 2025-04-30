@@ -221,9 +221,7 @@ if (php_sapi_name() === 'cli') {
                 echo "Usage: php deploymentCommunicator.php install_bundle <QA|PROD> <role> <bundleName> <new|passed>\n";
                 exit(1);
             }
-            break;
-        
-
+                    
         //creates a new bundle by name     
         case "create_bundle":
             if (isset($argv[2])) {
