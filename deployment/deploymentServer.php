@@ -44,6 +44,42 @@ function registerBundle($name, $version, $size) {
     }
 }
 
+//get ips from vm when they start
+function registerVmIp($env, $role, $ip) {
+    global $mydb;
+    echo "[SERVER] Registering IP for $env.$role => $ip\n";
+
+    // Create vm_ips table if it doesn't exist
+    $mydb->query("
+        CREATE TABLE IF NOT EXISTS vm_ips (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            env VARCHAR(10) NOT NULL,
+            role VARCHAR(20) NOT NULL,
+            ip VARCHAR(45) NOT NULL,
+            last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_vm (env, role)
+        )
+    ");
+
+    // Insert or update IP
+    $stmt = $mydb->prepare("
+        INSERT INTO vm_ips (env, role, ip)
+        VALUES (?, ?, ?)
+        ON DUPLICATE KEY UPDATE ip = VALUES(ip), last_updated = CURRENT_TIMESTAMP
+    ");
+    $stmt->bind_param("sss", $env, $role, $ip);
+    $stmt->execute();
+
+    if ($stmt->affected_rows > 0) {
+        echo "[SERVER] IP updated for $env.$role\n";
+        return ["status" => "ok", "message" => "IP registered"];
+    } else {
+        echo "[SERVER] No change to IP for $env.$role\n";
+        return ["status" => "noop", "message" => "IP unchanged"];
+    }
+}
+
+
 // === Request Processor ===
 function requestProcessor($request) {
     echo "[SERVER] Processing request...\n";
@@ -60,11 +96,15 @@ function requestProcessor($request) {
         case 'register_bundle':
             return registerBundle($request['name'], $request['version'], $request['size']);
 
+        case 'register_vm_ip':
+            return registerVmIp($request['env'], $request['role'], $request['ip']);
+
         default:
             echo "[SERVER] Unknown action received.\n";
             return ["status" => "error", "message" => "Unknown action"];
     }
 }
+
 
 // === Start Server ===
 $server = new rabbitMQServer("deploymentRabbitMQ.ini", "deploymentServer");
