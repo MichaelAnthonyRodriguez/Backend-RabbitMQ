@@ -36,7 +36,7 @@ function installBundle($bundleName, $version) {
     echo "[VM SERVER] installBundle() called for $bundleName v$version\n";
 
     $filename = "{$bundleName}_v{$version}.tgz";
-    $remotePath = "/home/michael-anthony-rodriguez/bundles/$filename";
+    $remotePath = "/home/$(getenv('USER'))/bundles/$filename";
     $localTmp = "/tmp/$filename";
     $extractDir = "/tmp/{$bundleName}_install";
 
@@ -63,6 +63,8 @@ function installBundle($bundleName, $version) {
 
     foreach ($config['files'] as $filename => $targetDir) {
         $source = "$extractDir/" . basename($filename);
+        $username = getenv("USER");
+        $targetDir = str_replace("[USER]", $username, $targetDir);
         $dest = rtrim($targetDir, '/') . '/' . basename($filename);
 
         if (file_exists($source)) {
@@ -99,10 +101,15 @@ function installSshKey($publicKey) {
         file_put_contents($authKeys, trim($publicKey) . "\n", FILE_APPEND | LOCK_EX);
         chmod($authKeys, 0600);
         chown($authKeys, get_current_user());
-        return ["status" => "ok", "message" => "SSH key installed"];
+        echo "[VM SERVER] Public key installed to authorized_keys\n";
+    } else {
+        echo "[VM SERVER] SSH key already exists in authorized_keys\n";
     }
 
-    return ["status" => "noop", "message" => "Key already exists"];
+    shell_exec("sudo chown -R " . getenv("USER") . ":www-data /var/www/sample");
+    shell_exec("sudo chmod -R 775 /var/www/sample");
+
+    return ["status" => "ok", "message" => "SSH key installed and permissions configured"];
 }
 
 // === Request Processor
@@ -119,3 +126,4 @@ function requestProcessor($request) {
 
 $server = new rabbitMQServer("vm.ini", $section);
 $server->process_requests("requestProcessor");
+?>
