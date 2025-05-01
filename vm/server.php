@@ -20,15 +20,17 @@ echo "[VM SERVER] Starting listener for: $section using vm.ini\n";
 
 // === Get Tailscale IP ===
 $ip = trim(shell_exec("tailscale ip | head -n 1"));
-echo "[VM SERVER] Reporting Tailscale IP to deployment server: $ip\n";
+$user = get_current_user();
+echo "[VM SERVER] Reporting Tailscale IP to deployment server: $ip (User: $user)\n";
 
-// === Report IP to Deployment Server ===
+// === Report IP and SSH user to Deployment Server ===
 $client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
 $client->publish([
     'action' => 'register_vm_ip',
     'env' => $env,
     'role' => $role,
-    'ip' => $ip
+    'ip' => $ip,
+    'ssh_user' => $user
 ]);
 
 // === Install Bundle
@@ -36,11 +38,11 @@ function installBundle($bundleName, $version) {
     echo "[VM SERVER] installBundle() called for $bundleName v$version\n";
 
     $filename = "{$bundleName}_v{$version}.tgz";
-    $remotePath = "/home/$(getenv('USER'))/bundles/$filename";
+    $remotePath = "/home/" . get_current_user() . "/bundles/$filename";
     $localTmp = "/tmp/$filename";
     $extractDir = "/tmp/{$bundleName}_install";
 
-    $scp = "scp michael-anthony-rodriguez@100.105.162.20:$remotePath $localTmp 2>&1";
+    $scp = "scp michael-anthony-rodriguez@100.105.162.20:" . escapeshellarg($remotePath) . " " . escapeshellarg($localTmp) . " 2>&1";
     $output = shell_exec($scp);
 
     if (!file_exists($localTmp)) {
@@ -63,7 +65,7 @@ function installBundle($bundleName, $version) {
 
     foreach ($config['files'] as $filename => $targetDir) {
         $source = "$extractDir/" . basename($filename);
-        $username = getenv("USER");
+        $username = get_current_user();
         $targetDir = str_replace("[USER]", $username, $targetDir);
         $dest = rtrim($targetDir, '/') . '/' . basename($filename);
 
@@ -106,7 +108,7 @@ function installSshKey($publicKey) {
         echo "[VM SERVER] SSH key already exists in authorized_keys\n";
     }
 
-    shell_exec("sudo chown -R " . getenv("USER") . ":www-data /var/www/sample");
+    shell_exec("sudo chown -R " . escapeshellarg(get_current_user()) . ":www-data /var/www/sample");
     shell_exec("sudo chmod -R 775 /var/www/sample");
 
     return ["status" => "ok", "message" => "SSH key installed and permissions configured"];
