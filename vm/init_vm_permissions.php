@@ -6,15 +6,17 @@ if (posix_geteuid() !== 0) {
     exit(1);
 }
 
-// === Define constants ===
-$deploymentUser = 'michael-anthony-rodriguez';
-$deploymentHost = '100.105.162.20';
-$deploymentKeyPath = "/home/$deploymentUser/.ssh/id_rsa.pub";
-$vmWebDir = '/var/www/sample';
-$vmUser = getenv('SUDO_USER') ?: getenv('USER'); // Who invoked sudo
+// === Identify local VM user ===
+$vmUser = getenv('SUDO_USER') ?: getenv('USER'); // The actual user running the sudo
 $vmHome = "/home/$vmUser";
 $vmSshDir = "$vmHome/.ssh";
 $authKeysFile = "$vmSshDir/authorized_keys";
+$vmWebDir = '/var/www/sample';
+
+// === Prompt for deployment username and IP (optional)
+$deploymentUser = readline("[INPUT] Enter deployment SSH username: ");
+$deploymentHost = readline("[INPUT] Enter deployment server IP: ");
+$deploymentTarget = "$deploymentUser@$deploymentHost";
 
 // === Step 1: Install OpenSSH server ===
 echo "[INIT] Installing openssh-server...\n";
@@ -34,23 +36,23 @@ shell_exec("chown -R $vmUser:www-data $vmWebDir");
 shell_exec("chmod -R 775 $vmWebDir");
 echo "[INIT] Set ownership and permissions on $vmWebDir\n";
 
-// === Step 4: Install deployment SSH key ===
+// === Step 4: Setup ~/.ssh and authorized_keys
 if (!is_dir($vmSshDir)) {
     mkdir($vmSshDir, 0700, true);
     chown($vmSshDir, $vmUser);
     echo "[INIT] Created SSH directory: $vmSshDir\n";
 }
 
-// Fetch public key from deployment server
-echo "[INIT] Fetching SSH key from $deploymentHost...\n";
-$publicKey = trim(shell_exec("ssh $deploymentUser@$deploymentHost 'cat ~/.ssh/id_rsa.pub'"));
+// === Step 5: Fetch deployment public key
+echo "[INIT] Fetching SSH key from $deploymentTarget...\n";
+$publicKey = trim(shell_exec("ssh $deploymentTarget 'cat ~/.ssh/id_rsa.pub'"));
 
 if (!$publicKey) {
-    echo "[ERROR] Could not retrieve public key from deployment server\n";
+    echo "[ERROR] Could not retrieve public key from deployment server.\n";
     exit(1);
 }
 
-// Append key if not already present
+// === Step 6: Write the key if it's not already there
 if (!file_exists($authKeysFile) || strpos(file_get_contents($authKeysFile), $publicKey) === false) {
     file_put_contents($authKeysFile, $publicKey . "\n", FILE_APPEND | LOCK_EX);
     chmod($authKeysFile, 0600);
