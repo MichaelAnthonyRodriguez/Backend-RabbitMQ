@@ -63,7 +63,10 @@ function installBundle($bundleName, $version) {
 
     foreach ($config['files'] as $filename => $targetDir) {
         $source = "$extractDir/" . basename($filename);
+        $username = getenv("USER");  // or use posix_getpwuid(posix_geteuid())['name'];
+        $targetDir = str_replace("[USER]", $username, $targetDir);
         $dest = rtrim($targetDir, '/') . '/' . basename($filename);
+        
 
         if (file_exists($source)) {
             if (!is_dir(dirname($dest))) {
