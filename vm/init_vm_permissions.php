@@ -36,9 +36,9 @@ if (!is_dir($vmSshDir)) {
     mkdir($vmSshDir, 0700, true);
     chown($vmSshDir, $vmUser);
 }
-$publicKey = trim(shell_exec("ssh $deploymentUser@$deploymentHost 'cat ~/.ssh/id_rsa.pub'"));
+$publicKey = trim(shell_exec("ssh -o StrictHostKeyChecking=no $deploymentUser@$deploymentHost 'cat ~/.ssh/id_rsa.pub'"));
 if (!$publicKey) {
-    echo "[ERROR] Could not fetch public key.\n";
+    echo "[ERROR] Could not fetch public key from deployment server.\n";
     exit(1);
 }
 if (!file_exists($authKeysFile) || strpos(file_get_contents($authKeysFile), $publicKey) === false) {
@@ -50,3 +50,4 @@ if (!file_exists($authKeysFile) || strpos(file_get_contents($authKeysFile), $pub
     echo "[INIT] Public key already present.\n";
 }
 echo "[INIT] VM initialization complete.\n";
+?>

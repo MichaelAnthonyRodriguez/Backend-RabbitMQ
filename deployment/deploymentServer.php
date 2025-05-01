@@ -10,7 +10,6 @@ date_default_timezone_set("America/New_York");
 
 // === Reset vm_ips table on startup ===
 $mydb->query("DROP TABLE IF EXISTS vm_ips");
-
 $mydb->query("
     CREATE TABLE vm_ips (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -22,7 +21,6 @@ $mydb->query("
         UNIQUE KEY unique_vm (env, role)
     )
 ");
-
 echo "[SERVER] vm_ips table reset on startup.\n";
 
 // === Action: Get latest version of any bundle by name ===
@@ -61,7 +59,7 @@ function registerBundle($name, $version, $size) {
     }
 }
 
-// === Action: Register VM IP and SSH key
+// === Action: Register VM IP and send SSH key ===
 function registerVmIp($env, $role, $ip, $sshUser) {
     global $mydb;
     echo "[SERVER] Registering IP for $env.$role => $ip (User: $sshUser)\n";
@@ -76,7 +74,11 @@ function registerVmIp($env, $role, $ip, $sshUser) {
 
     if ($stmt->affected_rows > 0) {
         echo "[SERVER] IP updated for $env.$role\n";
-        sendSshKeyToVm($env, $role);
+        // Send SSH key to VM every time a new IP is registered or updated
+        $sshResult = sendSshKeyToVm($env, $role);
+        if (isset($sshResult['status']) && $sshResult['status'] === 'error') {
+            echo "[SERVER] Warning: SSH key not sent to $env.$role ({$sshResult['message']})\n";
+        }
         return ["status" => "ok", "message" => "IP registered + SSH key sent"];
     } else {
         echo "[SERVER] No change to IP for $env.$role\n";
@@ -84,24 +86,33 @@ function registerVmIp($env, $role, $ip, $sshUser) {
     }
 }
 
-// === Send SSH key to VM
+// === Send SSH key to VM ===
 function sendSshKeyToVm($env, $role) {
     echo "[DEPLOYMENT] Preparing to send SSH key to $env.$role\n";
     $publicKey = file_get_contents('/home/michael-anthony-rodriguez/.ssh/id_rsa.pub');
+    if ($publicKey === false) {
+        echo "[ERROR] Public key file not found or unreadable for $env.$role\n";
+        return ["status" => "error", "message" => "SSH public key missing"];
+    }
+
     $client = new rabbitMQClient("vm.ini", "$env.$role");
+    try {
+        $client->publish([
+            'action' => 'install_ssh_key',
+            'key'    => $publicKey
+        ]);
+    } catch (Exception $e) {
+        echo "[ERROR] Failed to publish SSH key to $env.$role: " . $e->getMessage() . "\n";
+        return ["status" => "error", "message" => "SSH key dispatch failed"];
+    }
 
-    $client->publish([
-        'action' => 'install_ssh_key',
-        'key' => $publicKey
-    ]);
-
-    echo "[DEPLOYMENT] ✅ SSH key sent to $env.$role\n";
+    echo "[DEPLOYMENT] SSH key sent to $env.$role\n";
+    return ["status" => "ok", "message" => "SSH key sent"];
 }
 
-// === Deploy Bundle to VM
+// === Deploy bundle to VM ===
 function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
     global $mydb;
-
     echo "[DEPLOYMENT] Looking for latest '$status' bundle of '$bundleName'...\n";
 
     $stmt = $mydb->prepare("SELECT version FROM bundles WHERE name = ? AND status = ? ORDER BY version DESC LIMIT 1");
@@ -148,23 +159,30 @@ function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
     $scpOutput = shell_exec($scpCommand);
     echo "[SCP OUTPUT]\n$scpOutput\n";
 
-    if (strpos($scpOutput, "Permission denied") !== false || strpos($scpOutput, "No such file") !== false) {
+    if (strpos($scpOutput, "Permission denied") !== false 
+        || strpos($scpOutput, "No such file") !== false 
+        || strpos($scpOutput, "ssh:") !== false) {
         return ["status" => "error", "message" => "SCP failed: $scpOutput"];
     }
 
-    // Trigger install on VM
+    // Trigger install on VM via RabbitMQ RPC
     $client = new rabbitMQClient("vm.ini", "$env.$role");
-    $response = $client->send_request([
-        'action' => 'install_bundle',
-        'bundle' => $bundleName,
-        'version' => $version
-    ]);
+    try {
+        $response = $client->send_request([
+            'action' => 'install_bundle',
+            'bundle' => $bundleName,
+            'version' => $version
+        ]);
+    } catch (Exception $e) {
+        echo "[DEPLOYMENT] ERROR: Failed to send install command to $env.$role - " . $e->getMessage() . "\n";
+        return ["status" => "error", "message" => "VM deployment request failed"];
+    }
 
     echo "[DEPLOYMENT] Install triggered on $env.$role for $bundleName v$version\n";
     return $response;
 }
 
-// === Request Processor ===
+// === Request processor ===
 function requestProcessor($request) {
     echo "[SERVER] Processing request...\n";
     var_dump($request);
@@ -194,9 +212,8 @@ function requestProcessor($request) {
     }
 }
 
-// === Start Server ===
+// === Start server ===
 $server = new rabbitMQServer("deploymentRabbitMQ.ini", "deploymentServer");
-echo "[SERVER] Deployment Server is starting..." . PHP_EOL;
+echo "[SERVER] Deployment Server is starting...\n";
 $server->process_requests("requestProcessor");
 ?>
-Let me know if you also want the corresponding `server.php` VM file updated to send `ssh_user` on startup.

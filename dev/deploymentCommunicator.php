@@ -29,14 +29,19 @@ function getLatestVersionNumber($bundleName) {
     }
 }
 
-//get latest new or passed bundle
+// === Get latest bundle by status (new or passed) ===
 function getLatestBundleByStatus($bundleName, $status = 'new') {
     $client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
 
-    $response = $client->send_request([
-        'action' => 'get_latest_bundle_any_status',
-        'name' => $bundleName
-    ]);
+    try {
+        $response = $client->send_request([
+            'action' => 'get_latest_bundle_any_status',
+            'name' => $bundleName
+        ]);
+    } catch (Exception $e) {
+        echo "[ERROR] Exception while retrieving bundle info: " . $e->getMessage() . "\n";
+        return null;
+    }
 
     if (!isset($response['version']) || !isset($response['status'])) {
         echo "[ERROR] No bundles found for $bundleName\n";
@@ -50,7 +55,6 @@ function getLatestBundleByStatus($bundleName, $status = 'new') {
 
     return (int)$response['version'];
 }
-
 
 // === Build bundle tarball from config ===
 function createBundleTarball($bundleName, $version) {
@@ -128,7 +132,7 @@ function sendBundleTarball($bundlePath, $bundleFilename) {
     $deployDest = "/home/michael-anthony-rodriguez/bundles/$bundleFilename";
 
     echo "[COMMUNICATOR] Sending tarball to deployment server...\n";
-    $scpCommand = "scp $bundlePath $deployHost:$deployDest 2>&1";
+    $scpCommand = "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $bundlePath $deployHost:$deployDest 2>&1";
     $scpResult = shell_exec($scpCommand);
 
     echo "[DEBUG] SCP Output:\n$scpResult\n";
@@ -147,7 +151,7 @@ function registerBundleMetadata($bundleName, $version, $size) {
     $client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
 
     try {
-        $response = $client->publish([
+        $client->publish([
             'action' => 'register_bundle',
             'name' => $bundleName,
             'version' => $version,
@@ -169,45 +173,53 @@ function triggerInstallOnVm($env, $role, $bundleName, $status = 'new') {
 
     echo "[COMMUNICATOR] Instructing deployment server to deploy bundle '$bundleName' (status: $status) to $env.$role\n";
 
-    $response = $client->send_request([
-        'action' => 'deploy_bundle_to_vm',
-        'env'    => $env,
-        'role'   => $role,
-        'bundleName'   => $bundleName,
-        'status' => $status
-    ]);
+    try {
+        $response = $client->send_request([
+            'action' => 'deploy_bundle_to_vm',
+            'env'    => $env,
+            'role'   => $role,
+            'bundleName' => $bundleName,
+            'status' => $status
+        ]);
+    } catch (Exception $e) {
+        echo "[ERROR] Exception during bundle deployment request: " . $e->getMessage() . "\n";
+        return ["status" => "error", "message" => "Deployment request failed"];
+    }
 
     echo "[COMMUNICATOR] Deployment server response:\n";
     print_r($response);
+    return $response;
 }
-
 
 // === CLI Entry Point ===
 if (php_sapi_name() === 'cli') {
     $cmd = $argv[1] ?? null;
 
     switch ($cmd) {
-        //installs bundle to vm specified by QA/PROD FRONTEND/BACKEND/DMZ BUNDLE_NAME NEW/PASSED
+        // Usage: install_bundle <QA|PROD> <role> <bundleName> <new|passed>
         case "install_bundle":
             if (isset($argv[2], $argv[3], $argv[4], $argv[5])) {
                 $env = $argv[2];
                 $role = $argv[3];
                 $bundleName = $argv[4];
                 $statusType = strtolower($argv[5]);
-        
+
                 if (!in_array($statusType, ['new', 'passed'])) {
                     echo "[ERROR] Invalid status type. Use 'new' or 'passed'.\n";
                     exit(1);
                 }
-        
-                triggerInstallOnVm($env, $role, $bundleName, $statusType);
+
+                $result = triggerInstallOnVm($env, $role, $bundleName, $statusType);
+                if (!$result || (isset($result['status']) && $result['status'] === 'error')) {
+                    exit(1);
+                }
                 exit(0);
             } else {
                 echo "Usage: php deploymentCommunicator.php install_bundle <QA|PROD> <role> <bundleName> <new|passed>\n";
                 exit(1);
             }
-                    
-        //creates a new bundle by name     
+
+        // Usage: create_bundle <bundleName>
         case "create_bundle":
             if (isset($argv[2])) {
                 $bundleName = $argv[2];
