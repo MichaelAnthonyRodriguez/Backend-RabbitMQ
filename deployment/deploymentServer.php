@@ -87,7 +87,7 @@ function registerVmIp($env, $role, $ip) {
 function sendSshKeyToVm($env, $role) {
     $publicKey = file_get_contents('/home/michael-anthony-rodriguez/.ssh/id_rsa.pub');
     $client = new rabbitMQClient("vm.ini", "{$env}.{$role}");
-
+    echo "sent ssh key to" . $env . "." . $role;
     $client->publish([
         'action' => 'install_ssh_key',
         'key' => $publicKey
