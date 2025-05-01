@@ -155,6 +155,8 @@ function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
 
     echo "[DEPLOYMENT] SCPing bundle to $sshUser@$vmIp...\n";
     echo "[DEPLOYMENT] Local path: $localPath -> $sshUser@$vmIp:$targetPath\n";
+
+    // Suppress host key verification prompt
     $scpCommand = "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $localPath $sshUser@$vmIp:$targetPath 2>&1";
     $scpOutput = shell_exec($scpCommand);
     echo "[SCP OUTPUT]\n$scpOutput\n";
@@ -181,6 +183,7 @@ function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
     echo "[DEPLOYMENT] Install triggered on $env.$role for $bundleName v$version\n";
     return $response;
 }
+
 
 // === Request processor ===
 function requestProcessor($request) {
