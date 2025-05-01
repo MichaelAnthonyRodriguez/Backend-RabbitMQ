@@ -113,6 +113,7 @@ function sendSshKeyToVm($env, $role) {
 // === Deploy bundle to VM ===
 function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
     global $mydb;
+
     echo "[DEPLOYMENT] Looking for latest '$status' bundle of '$bundleName'...\n";
 
     $stmt = $mydb->prepare("SELECT version FROM bundles WHERE name = ? AND status = ? ORDER BY version DESC LIMIT 1");
@@ -155,9 +156,7 @@ function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
 
     echo "[DEPLOYMENT] SCPing bundle to $sshUser@$vmIp...\n";
     echo "[DEPLOYMENT] Local path: $localPath -> $sshUser@$vmIp:$targetPath\n";
-
-    // Suppress host key verification prompt
-    $scpCommand = "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR $localPath $sshUser@$vmIp:$targetPath 2>&1";
+    $scpCommand = "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $localPath $sshUser@$vmIp:$targetPath 2>&1";
     $scpOutput = shell_exec($scpCommand);
     echo "[SCP OUTPUT]\n$scpOutput\n";
 
@@ -167,22 +166,28 @@ function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
         return ["status" => "error", "message" => "SCP failed: $scpOutput"];
     }
 
-    // Trigger install on VM via RabbitMQ RPC
-    $client = new rabbitMQClient("vm.ini", "$env.$role");
-    try {
-        $response = $client->send_request([
-            'action' => 'install_bundle',
-            'bundle' => $bundleName,
-            'version' => $version
-        ]);
-    } catch (Exception $e) {
-        echo "[DEPLOYMENT] ERROR: Failed to send install command to $env.$role - " . $e->getMessage() . "\n";
-        return ["status" => "error", "message" => "VM deployment request failed"];
-    }
+    // === RPC to VM ===
+    echo "[DEPLOYMENT] Triggering install on $env.$role for $bundleName v$version...\n";
 
-    echo "[DEPLOYMENT] Install triggered on $env.$role for $bundleName v$version\n";
-    return $response;
+    $client = new rabbitMQClient("vm.ini", "$env.$role");
+
+    $request = [
+        'action' => 'install_bundle',
+        'bundle' => $bundleName,
+        'version' => $version
+    ];
+
+    try {
+        // Add timeout of 10 seconds (edit rabbitMQClient if needed)
+        $response = $client->send_request($request, 10);
+        echo "[DEPLOYMENT] ✅ Install triggered successfully.\n";
+        return $response;
+    } catch (Exception $e) {
+        echo "[DEPLOYMENT] ❌ ERROR: RPC install failed - " . $e->getMessage() . "\n";
+        return ["status" => "error", "message" => "VM did not respond to install request"];
+    }
 }
+
 
 
 // === Request processor ===
