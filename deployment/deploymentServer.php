@@ -157,7 +157,7 @@ function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
     echo "[DEPLOYMENT] Local path: $localPath -> $sshUser@$vmIp:$targetPath\n";
 
     // Suppress host key verification prompt
-    $scpCommand = "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $localPath $sshUser@$vmIp:$targetPath 2>&1";
+    $scpCommand = "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR $localPath $sshUser@$vmIp:$targetPath 2>&1";
     $scpOutput = shell_exec($scpCommand);
     echo "[SCP OUTPUT]\n$scpOutput\n";
 
