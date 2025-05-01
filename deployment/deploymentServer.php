@@ -85,16 +85,19 @@ function registerVmIp($env, $role, $ip) {
 
 //sends the vm the ssh key
 function sendSshKeyToVm($env, $role) {
+    echo "[DEPLOYMENT] Preparing to send SSH key to $env.$role\n";
+
     $publicKey = file_get_contents('/home/michael-anthony-rodriguez/.ssh/id_rsa.pub');
-    $client = new rabbitMQClient("vm.ini", "{$env}.{$role}");
-    echo "sent ssh key to" . $env . "." . $role;
+    $client = new rabbitMQClient("vm.ini", "$env.$role");
+
     $client->publish([
         'action' => 'install_ssh_key',
         'key' => $publicKey
     ]);
 
-    echo "[DEPLOYMENT] Sent SSH key to $env.$role\n";
+    echo "[DEPLOYMENT] ✅ SSH key sent to $env.$role\n";
 }
+
 
 //deploys the bundle to the vm
 function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
