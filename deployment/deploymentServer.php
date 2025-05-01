@@ -62,11 +62,9 @@ function registerBundle($name, $version, $size) {
 }
 
 // === Action: Register VM IP and SSH key
-function registerVmIp($env, $role, $ip) {
+function registerVmIp($env, $role, $ip, $sshUser) {
     global $mydb;
-    echo "[SERVER] Registering IP for $env.$role => $ip\n";
-
-    $sshUser = 'root';
+    echo "[SERVER] Registering IP for $env.$role => $ip (User: $sshUser)\n";
 
     $stmt = $mydb->prepare("
         INSERT INTO vm_ips (env, role, ip, ssh_user)
@@ -145,6 +143,7 @@ function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
     $targetPath = "/tmp/$filename";
 
     echo "[DEPLOYMENT] SCPing bundle to $sshUser@$vmIp...\n";
+    echo "[DEPLOYMENT] Local path: $localPath -> $sshUser@$vmIp:$targetPath\n";
     $scpCommand = "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $localPath $sshUser@$vmIp:$targetPath 2>&1";
     $scpOutput = shell_exec($scpCommand);
     echo "[SCP OUTPUT]\n$scpOutput\n";
@@ -182,7 +181,7 @@ function requestProcessor($request) {
             return registerBundle($request['name'], $request['version'], $request['size']);
 
         case 'register_vm_ip':
-            return registerVmIp($request['env'], $request['role'], $request['ip']);
+            return registerVmIp($request['env'], $request['role'], $request['ip'], $request['ssh_user']);
 
         case 'push_ssh_key':
             return sendSshKeyToVm($request['env'], $request['role']);
@@ -199,3 +198,5 @@ function requestProcessor($request) {
 $server = new rabbitMQServer("deploymentRabbitMQ.ini", "deploymentServer");
 echo "[SERVER] Deployment Server is starting..." . PHP_EOL;
 $server->process_requests("requestProcessor");
+?>
+Let me know if you also want the corresponding `server.php` VM file updated to send `ssh_user` on startup.
