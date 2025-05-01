@@ -105,7 +105,7 @@ function installSshKey($publicKey) {
     }
 
     // === Give VM user write access to /var/www/sample
-    shell_exec("sudo chown -R $USER:www-data /var/www/sample");
+    shell_exec("sudo chown -R " . getenv("USER") . ":www-data /var/www/sample");
     shell_exec("sudo chmod -R 775 /var/www/sample");
 
     return ["status" => "ok", "message" => "SSH key installed and permissions configured"];
