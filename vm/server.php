@@ -63,10 +63,7 @@ function installBundle($bundleName, $version) {
 
     foreach ($config['files'] as $filename => $targetDir) {
         $source = "$extractDir/" . basename($filename);
-        $username = getenv("USER");  // or use posix_getpwuid(posix_geteuid())['name'];
-        $targetDir = str_replace("[USER]", $username, $targetDir);
         $dest = rtrim($targetDir, '/') . '/' . basename($filename);
-        
 
         if (file_exists($source)) {
             if (!is_dir(dirname($dest))) {
@@ -102,23 +99,17 @@ function installSshKey($publicKey) {
         file_put_contents($authKeys, trim($publicKey) . "\n", FILE_APPEND | LOCK_EX);
         chmod($authKeys, 0600);
         chown($authKeys, get_current_user());
-        echo "[VM SERVER] Public key installed to authorized_keys\n";
-    } else {
-        echo "[VM SERVER] SSH key already exists in authorized_keys\n";
+        return ["status" => "ok", "message" => "SSH key installed"];
     }
 
-    // === Give VM user write access to /var/www/sample
-    shell_exec("sudo chown -R " . getenv("USER") . ":www-data /var/www/sample");
-    shell_exec("sudo chmod -R 775 /var/www/sample");
-
-    return ["status" => "ok", "message" => "SSH key installed and permissions configured"];
+    return ["status" => "noop", "message" => "Key already exists"];
 }
 
 // === Request Processor
 function requestProcessor($request) {
     switch ($request['action']) {
         case 'install_bundle':
-            return installBundle($request['bundle'], $request['version']);        
+            return installBundle($request['bundle'], $request['version']);
         case 'install_ssh_key':
             return installSshKey($request['key']);
         default:

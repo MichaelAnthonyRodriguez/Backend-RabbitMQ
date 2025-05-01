@@ -6,199 +6,119 @@ require_once('rabbitMQLib.inc');
 require_once('mysqlconnect.php');
 require_once('populateDB.php');
 
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 date_default_timezone_set("America/New_York");
 
-// === Action: Get latest version of any bundle by name ===
-function getLatestBundleAnyStatus($name) {
-    global $mydb;
-    echo "[SERVER] Running getLatestBundleAnyStatus()\n";
-
-    $stmt = $mydb->prepare("SELECT name, version, status, size FROM bundles WHERE name = ? ORDER BY version DESC LIMIT 1");
-    $stmt->bind_param("s", $name);
-    $stmt->execute();
-    $result = $stmt->get_result();
-
-    if ($row = $result->fetch_assoc()) {
-        return $row;
-    } else {
-        return ["status" => "none", "message" => "No bundles found"];
-    }
-}
-
-// === Action: Register new bundle ===
-function registerBundle($name, $version, $size) {
-    global $mydb;
-    echo "[SERVER] Running registerBundle()\n";
-
-    $status = 'new';
-    $stmt = $mydb->prepare("INSERT INTO bundles (name, version, status, size) VALUES (?, ?, ?, ?)");
-    $stmt->bind_param("sisi", $name, $version, $status, $size);
-    $stmt->execute();
-
-    if ($stmt->affected_rows > 0) {
-        echo "[SERVER] Bundle $name v$version registered successfully.\n";
-        return ["status" => "ok", "message" => "Bundle registered"];
-    } else {
-        echo "[SERVER] Bundle registration failed.\n";
-        return ["status" => "error", "message" => "Failed to register bundle"];
-    }
-}
-
-//get ips from vm when they start
-function registerVmIp($env, $role, $ip) {
-    global $mydb;
-    echo "[SERVER] Registering IP for $env.$role => $ip\n";
-
-    // Create vm_ips table if it doesn't exist
-    $mydb->query("
-        CREATE TABLE IF NOT EXISTS vm_ips (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            env VARCHAR(10) NOT NULL,
-            role VARCHAR(20) NOT NULL,
-            ip VARCHAR(45) NOT NULL,
-            last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY unique_vm (env, role)
-        )
-    ");
-
-    // Insert or update IP
-    $stmt = $mydb->prepare("
-        INSERT INTO vm_ips (env, role, ip)
-        VALUES (?, ?, ?)
-        ON DUPLICATE KEY UPDATE ip = VALUES(ip), last_updated = CURRENT_TIMESTAMP
-    ");
-    $stmt->bind_param("sss", $env, $role, $ip);
-    $stmt->execute();
-
-    if ($stmt->affected_rows > 0) {
-        echo "[SERVER] IP updated for $env.$role\n";
-
-        // 🚀 Trigger SSH key installation to that VM
-        sendSshKeyToVm($env, $role);
-
-        return ["status" => "ok", "message" => "IP registered + SSH key sent"];
-    } else {
-        echo "[SERVER] No change to IP for $env.$role\n";
-        return ["status" => "noop", "message" => "IP unchanged"];
-    }
-}
-
-//sends the vm the ssh key
-function sendSshKeyToVm($env, $role) {
-    echo "[DEPLOYMENT] Preparing to send SSH key to $env.$role\n";
-
-    $publicKey = file_get_contents('/home/michael-anthony-rodriguez/.ssh/id_rsa.pub');
-    $client = new rabbitMQClient("vm.ini", "$env.$role");
-
-    $client->publish([
-        'action' => 'install_ssh_key',
-        'key' => $publicKey
-    ]);
-
-    echo "[DEPLOYMENT] ✅ SSH key sent to $env.$role\n";
-}
-
-
-//deploys the bundle to the vm
-function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
+function handleDeploymentMessage($payload) {
     global $mydb;
 
-    echo "[DEPLOYMENT] Looking for latest '$status' bundle of '$bundleName'...\n";
+    echo "[SERVER] --- New Incoming Message ---\n";
 
-    $stmt = $mydb->prepare("SELECT version FROM bundles WHERE name = ? AND status = ? ORDER BY version DESC LIMIT 1");
-    $stmt->bind_param("ss", $bundleName, $status);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $bundle = $result->fetch_assoc();
-
-    if (!$bundle) {
-        echo "[DEPLOYMENT] No '$status' bundle found for $bundleName\n";
-        return ["status" => "error", "message" => "Bundle not found"];
+    if (empty($payload)) {
+        echo "[SERVER] ERROR: Empty payload received.\n";
+        return ["status" => "error", "message" => "Empty payload"];
     }
 
-    $version = (int)$bundle['version'];
-    $filename = "{$bundleName}_v{$version}.tgz";
-    $localPath = "/home/michael-anthony-rodriguez/bundles/$filename";
+    echo "[SERVER] Payload Received:\n";
+    print_r($payload);
 
-    if (!file_exists($localPath)) {
-        echo "[DEPLOYMENT] Bundle file not found: $localPath\n";
-        return ["status" => "error", "message" => "Local bundle file missing"];
+    if (function_exists('ackCurrentMessage')) {
+        ackCurrentMessage();
     }
 
-    echo "[DEPLOYMENT] Found bundle version $version\n";
-
-    // Get VM IP
-    $ipQuery = $mydb->prepare("SELECT ip FROM vm_ips WHERE env = ? AND role = ?");
-    $ipQuery->bind_param("ss", $env, $role);
-    $ipQuery->execute();
-    $ipResult = $ipQuery->get_result();
-    $ipRow = $ipResult->fetch_assoc();
-
-    if (!$ipRow) {
-        echo "[DEPLOYMENT] No IP registered for $env.$role\n";
-        return ["status" => "error", "message" => "VM IP not registered"];
+    if (!isset($payload['action'])) {
+        echo "[SERVER] ERROR: No 'action' specified in payload.\n";
+        return ["status" => "error", "message" => "No action specified"];
     }
 
-    $vmIp = $ipRow['ip'];
-    $targetPath = "/tmp/$filename";
+    $action = $payload['action'];
+    echo "[SERVER] Action Requested: $action\n";
 
-    echo "[DEPLOYMENT] SCPing bundle to $vmIp...\n";
-    $scpCommand = "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $localPath michael-anthony-rodriguez@$vmIp:$targetPath 2>&1";
-    $scpOutput = shell_exec($scpCommand);
-    echo "[SCP OUTPUT]\n$scpOutput\n";
+    switch ($action) {
+        case 'get_new_bundles':
+            echo "[SERVER] Handling 'get_new_bundles'\n";
+            $stmt = $mydb->prepare("SELECT name, version FROM bundles WHERE status = 'new'");
+            if (!$stmt->execute()) {
+                echo "[SERVER] ERROR: Failed to query bundles.\n";
+                return ["status" => "error", "message" => "DB query failed"];
+            }
+            $result = $stmt->get_result();
+            $bundles = [];
+            while ($row = $result->fetch_assoc()) {
+                $bundles[] = $row;
+            }
+            echo "[SERVER] Found Bundles:\n";
+            print_r($bundles);
+            return ['bundles' => $bundles];
 
-    if (strpos($scpOutput, "Permission denied") !== false || strpos($scpOutput, "No such file") !== false) {
-        return ["status" => "error", "message" => "SCP failed: $scpOutput"];
-    }
+        case 'bundle_result':
+            echo "[SERVER] Handling 'bundle_result'\n";
+            $name = $payload['name'];
+            $version = $payload['version'];
+            $status = $payload['status'];
 
-    // Send install command to VM
-    $client = new rabbitMQClient("vm.ini", "$env.$role");
-    $response = $client->send_request([
-        'action' => 'install_bundle',
-        'bundle' => $bundleName,
-        'version' => $version
-    ]);
+            $stmt = $mydb->prepare("UPDATE bundles SET status = ? WHERE name = ? AND version = ?");
+            $stmt->bind_param("ssi", $status, $name, $version);
 
-    echo "[DEPLOYMENT] Install triggered on $env.$role for $bundleName v$version\n";
-    return $response;
-}
+            if (!$stmt->execute()) {
+                echo "[SERVER] ERROR: Failed to update bundle result.\n";
+                return ["status" => "error", "message" => "Failed to update bundle result"];
+            }
 
+            echo "[SERVER] Bundle '$name' version $version updated to status '$status'.\n";
+            return ["status" => "ok", "message" => "Bundle result updated"];
 
-
-// === Request Processor ===
-function requestProcessor($request) {
-    echo "[SERVER] Processing request...\n";
-    var_dump($request);
-
-    if (!isset($request['action'])) {
-        return ["status" => "error", "message" => "Unsupported message type"];
-    }
-
-    switch ($request['action']) {
         case 'get_latest_bundle_any_status':
-            return getLatestBundleAnyStatus($request['name']);        
+            echo "[SERVER] Handling 'get_latest_bundle_any_status'\n";
+            $name = $payload['name'];
+
+            $stmt = $mydb->prepare("SELECT name, version, status, size FROM bundles WHERE name = ? ORDER BY version DESC LIMIT 1");
+            $stmt->bind_param("s", $name);
+
+            if (!$stmt->execute()) {
+                echo "[SERVER] ERROR: Failed to query latest bundle.\n";
+                return ["status" => "error", "message" => "Failed to fetch latest bundle"];
+            }
+
+            $result = $stmt->get_result();
+            if ($row = $result->fetch_assoc()) {
+                echo "[SERVER] Latest Bundle Found:\n";
+                print_r($row);
+                return $row;
+            } else {
+                echo "[SERVER] No bundle found for name: $name\n";
+                return [];
+            }
 
         case 'register_bundle':
-            return registerBundle($request['name'], $request['version'], $request['size']);
+            echo "[SERVER] Handling 'register_bundle'\n";
+            $name = $payload['name'];
+            $version = $payload['version'];
+            $status = $payload['status'];
+            $size = $payload['size'];
 
-        case 'register_vm_ip':
-            return registerVmIp($request['env'], $request['role'], $request['ip']);
+            $stmt = $mydb->prepare("INSERT INTO bundles (name, version, status, size) VALUES (?, ?, ?, ?)");
+            $stmt->bind_param("sisi", $name, $version, $status, $size);
 
-        case 'push_ssh_key':
-            return sendSshKeyToVm($request['env'], $request['role'], $request['key']);
+            if (!$stmt->execute()) {
+                echo "[SERVER] ERROR: Failed to register bundle.\n";
+                return ["status" => "error", "message" => "Failed to register bundle"];
+            }
 
-        case 'deploy_bundle_to_vm':
-            return deployBundleToVm($request['env'], $request['role'], $request['bundleName'], $request['status']);
+            echo "[SERVER] Bundle '$name' version $version registered successfully.\n";
+            return ["status" => "ok", "message" => "Bundle registered"];
 
         default:
-            return ["status" => "error", "message" => "Unknown action"];
+            echo "[SERVER] ERROR: Unknown action '$action'\n";
+            return ["status" => "error", "message" => "Unknown action: $action"];
     }
 }
 
+echo "[SERVER] === Deployment Server Listener Starting ===\n";
 
-
-// === Start Server ===
 $server = new rabbitMQServer("deploymentRabbitMQ.ini", "deploymentServer");
-echo "[SERVER] Deployment Server is starting..." . PHP_EOL;
-$server->process_requests("requestProcessor");
+$server->process_requests('handleDeploymentMessage');
+
 ?>
