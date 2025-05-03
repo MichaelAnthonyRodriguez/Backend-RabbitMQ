@@ -179,7 +179,7 @@ function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
 
     try {
         // Add timeout of 10 seconds (edit rabbitMQClient if needed)
-        $response = $client->send_request($request, 10);
+        $response = $client->publish($request, 10);
         echo "[DEPLOYMENT] ✅ Install triggered successfully.\n";
         return $response;
     } catch (Exception $e) {
