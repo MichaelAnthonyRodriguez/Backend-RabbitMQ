@@ -180,10 +180,10 @@ function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
     try {
         // Add timeout of 10 seconds (edit rabbitMQClient if needed)
         $response = $client->publish($request, 10);
-        echo "[DEPLOYMENT] ✅ Install triggered successfully.\n";
+        echo "[DEPLOYMENT] Install triggered successfully.\n";
         return $response;
     } catch (Exception $e) {
-        echo "[DEPLOYMENT] ❌ ERROR: RPC install failed - " . $e->getMessage() . "\n";
+        echo "[DEPLOYMENT] ERROR: RPC install failed - " . $e->getMessage() . "\n";
         return ["status" => "error", "message" => "VM did not respond to install request"];
     }
 }
