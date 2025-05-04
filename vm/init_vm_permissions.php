@@ -1,11 +1,15 @@
 #!/usr/bin/php
 <?php
 if (posix_geteuid() !== 0) {
-    echo "This script must be run with sudo: sudo php init_vm_permissions.php [sql]\n";
+    echo "This script must be run with sudo: sudo php init_vm_permissions.php [sql] [web]\n";
     exit(1);
 }
 
-$startMysql = ($argv[1] ?? '') === 'sql';
+// === CLI flags ===
+$args = $argv;
+array_shift($args);
+$startMysql = in_array('sql', $args);
+$startApache = in_array('web', $args);
 
 $deploymentUser = 'michael-anthony-rodriguez';
 $deploymentHost = '100.105.162.20';
@@ -18,26 +22,31 @@ $vmWebDir = "/var/www/html";
 // === Install only SSH server/client ===
 shell_exec("apt install -y openssh-server openssh-client");
 
-// === Start Tailscale first ===
+// === Start Tailscale and RabbitMQ first ===
 shell_exec("systemctl start tailscaled");
 echo "[INIT] Tailscale started.\n";
 
-// === Start RabbitMQ next ===
 shell_exec("systemctl start rabbitmq-server");
 echo "[INIT] RabbitMQ started.\n";
 
-// === Optionally start MySQL ===
+// === Conditionally start MySQL ===
 if ($startMysql) {
     shell_exec("systemctl start mysql");
     echo "[INIT] MySQL started.\n";
 }
 
-// === Start SSH last ===
+// === Conditionally start Apache2 ===
+if ($startApache) {
+    shell_exec("systemctl start apache2");
+    echo "[INIT] Apache2 started.\n";
+}
+
+// === Start SSH ===
 shell_exec("systemctl enable ssh");
 shell_exec("systemctl start ssh");
 echo "[INIT] SSH installed and running.\n";
 
-// === Disable autostart for specific services ===
+// === Disable autostart for non-SSH services ===
 $disableOnBoot = ["tailscaled", "mysql", "rabbitmq-server", "apache2"];
 foreach ($disableOnBoot as $svc) {
     shell_exec("systemctl disable $svc");
@@ -101,4 +110,5 @@ $envPrefix = "XDG_RUNTIME_DIR=/run/user/$uid";
 shell_exec("runuser -l $vmUser -c '$envPrefix systemctl --user daemon-reexec'");
 shell_exec("runuser -l $vmUser -c '$envPrefix systemctl --user daemon-reload'");
 echo "[INIT] systemd --user daemon reloaded for $vmUser\n";
+
 ?>
