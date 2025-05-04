@@ -1,0 +1,12 @@
+[Unit]
+Description=Custom RabbitMQ Wrapper
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/service rabbitmq-server start
+ExecStop=/usr/sbin/service rabbitmq-server stop
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

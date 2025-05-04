@@ -1,0 +1,11 @@
+[Unit]
+Description=Custom PHP server script
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/php /home/%u//Cinemaniacs/serverBackend/testRabbitMQServer.php
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

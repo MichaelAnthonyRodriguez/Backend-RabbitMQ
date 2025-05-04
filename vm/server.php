@@ -17,6 +17,24 @@ if (!$env || !$role) {
 $section = "{$env}.{$role}";
 echo "[VM SERVER] Starting listener for: $section\n";
 
+// === Start role-specific services ===
+function startRoleServices($role) {
+    $common = ['ssh', 'rabbitmq-server'];
+    $services = match ($role) {
+        'frontend' => [...$common, 'apache2'],
+        'backend'  => [...$common, 'backend.service'],
+        'cron'     => [...$common, 'cron-job-1.service', 'cron-job-2.service'],
+        default    => $common
+    };
+
+    foreach ($services as $svc) {
+        echo "[VM SERVER] Starting service: $svc\n";
+        shell_exec("sudo systemctl start " . escapeshellarg($svc));
+    }
+}
+
+startRoleServices($role);
+
 // Get Tailscale IP and current user
 $ip = trim(shell_exec("tailscale ip | head -n 1"));
 $sshUser = get_current_user();
@@ -92,9 +110,19 @@ function installBundle($bundleName, $version) {
         if (!empty($services)) {
             echo "[VM {$env}.{$role}] Restarting services: " . implode(', ', $services) . "\n";
             foreach ($services as $service) {
-                shell_exec("sudo systemctl restart " . escapeshellarg($service));
+                shell_exec("systemctl --user restart " . escapeshellarg($service));
             }
         }
+    }    
+
+    // Append to crontab if [cronjobs] exists
+    if (isset($config['cronjobs'])) {
+        $cronEntries = implode("\n", $config['cronjobs']);
+        $cronFile = "/tmp/bundle_cron_" . uniqid() . ".txt";
+        file_put_contents($cronFile, $cronEntries . "\n", FILE_APPEND);
+        shell_exec("crontab $cronFile");
+        unlink($cronFile);
+        echo "[VM {$env}.{$role}] Cronjobs installed.\n";
     }
 
     // Clean up bundle files

@@ -1,0 +1,13 @@
+[Unit]
+Description=Apache2 Web Server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/apache2ctl -DFOREGROUND
+ExecReload=/bin/kill -HUP $MAINPID
+ExecStop=/usr/sbin/apache2ctl stop
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

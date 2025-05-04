@@ -1,0 +1,13 @@
+[Unit]
+Description=Movie API Controller Job
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/php /home/[USER]/Cinemaniacs/dmz/movie_api_controller.php
+User=[USER]
+StandardOutput=append:/var/log/movie_api_controller.log
+StandardError=append:/var/log/movie_api_controller.log
+
+[Install]
+WantedBy=multi-user.target

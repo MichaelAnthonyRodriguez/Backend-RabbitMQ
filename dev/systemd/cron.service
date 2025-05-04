@@ -1,0 +1,11 @@
+[Unit]
+Description=Cron Daemon
+After=network.target
+
+[Service]
+ExecStart=/usr/sbin/cron -f
+ExecStop=/bin/kill -TERM $MAINPID
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

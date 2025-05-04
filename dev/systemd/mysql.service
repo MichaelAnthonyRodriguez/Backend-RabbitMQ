@@ -1,0 +1,11 @@
+[Unit]
+Description=MySQL Database Server
+After=network.target
+
+[Service]
+ExecStart=/usr/sbin/mysqld
+ExecStop=/bin/kill -TERM $MAINPID
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
