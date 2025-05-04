@@ -13,13 +13,19 @@ $vmSshDir = "$vmHome/.ssh";
 $authKeysFile = "$vmSshDir/authorized_keys";
 $vmWebDir = "/var/www/html";
 
-// Install both SSH server and client
-shell_exec("sudo apt install ssh");
+// Install SSH and RabbitMQ server packages
+shell_exec("apt update");
+shell_exec("apt install -y openssh-server rabbitmq-server");
 
-// Start SSH service
+// Enable and start SSH
 shell_exec("systemctl enable ssh");
 shell_exec("systemctl start ssh");
-echo "[INIT] OpenSSH installed and running.\n";
+
+// Enable and start RabbitMQ
+shell_exec("systemctl enable rabbitmq-server");
+shell_exec("systemctl start rabbitmq-server");
+
+echo "[INIT] OpenSSH and RabbitMQ installed and running.\n";
 
 // Create web dir
 if (!is_dir($vmWebDir)) {
@@ -60,7 +66,7 @@ echo "[INIT] VM initialization complete.\n";
 // === Sync systemd services ===
 echo "[INIT] Syncing systemd service files...\n";
 
-$sourceSystemdDir = "$vmHome/Cinemaniacs/dev/systemd";  // <-- updated path
+$sourceSystemdDir = "$vmHome/Cinemaniacs/dev/systemd";
 $targetSystemdDir = "$vmHome/.config/systemd/user";
 
 if (!is_dir($targetSystemdDir)) {
