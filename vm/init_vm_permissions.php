@@ -15,26 +15,41 @@ $vmSshDir = "$vmHome/.ssh";
 $authKeysFile = "$vmSshDir/authorized_keys";
 $vmWebDir = "/var/www/html";
 
-// Install SSH server/client
+// === Install only SSH server/client ===
 shell_exec("apt install -y openssh-server openssh-client");
 
-// Start SSH
+// === Start SSH ===
 shell_exec("systemctl enable ssh");
 shell_exec("systemctl start ssh");
 echo "[INIT] SSH installed and running.\n";
 
-// Optionally start MySQL and RabbitMQ
+// === Start Tailscale and RabbitMQ (always) ===
+shell_exec("systemctl start tailscaled");
+echo "[INIT] Tailscale started.\n";
+
+shell_exec("systemctl start rabbitmq-server");
+echo "[INIT] RabbitMQ started.\n";
+
+// === Optionally start MySQL ===
 if ($startMysql) {
-    shell_exec("systemctl enable mysql");
     shell_exec("systemctl start mysql");
     echo "[INIT] MySQL started.\n";
 }
 
-shell_exec("systemctl enable rabbitmq-server");
-shell_exec("systemctl start rabbitmq-server");
-echo "[INIT] RabbitMQ started.\n";
+// === Disable auto-start on boot ===
+$disableOnBoot = [
+    "tailscaled",
+    "mysql",
+    "rabbitmq-server",
+    "apache2"
+];
 
-// Create web dir if needed
+foreach ($disableOnBoot as $svc) {
+    shell_exec("systemctl disable $svc");
+    echo "[INIT] Disabled autostart for $svc\n";
+}
+
+// === Web directory setup ===
 if (!is_dir($vmWebDir)) {
     mkdir($vmWebDir, 0775, true);
 }
@@ -42,7 +57,7 @@ shell_exec("chown -R $vmUser:www-data $vmWebDir");
 shell_exec("chmod -R 775 $vmWebDir");
 echo "[INIT] Web directory permissions set.\n";
 
-// Set up .ssh
+// === SSH Key Installation ===
 if (!is_dir($vmSshDir)) {
     mkdir($vmSshDir, 0700, true);
     chown($vmSshDir, $vmUser);
@@ -66,7 +81,7 @@ if (!file_exists($authKeysFile) || strpos(file_get_contents($authKeysFile), $pub
     echo "[INIT] Public key already exists.\n";
 }
 
-// === Sync systemd user services ===
+// === Sync systemd service files ===
 echo "[INIT] Syncing systemd service files...\n";
 
 $sourceSystemdDir = "$vmHome/Cinemaniacs/dev/systemd";
@@ -78,7 +93,6 @@ if (!is_dir($targetSystemdDir)) {
 }
 
 $serviceFiles = glob("$sourceSystemdDir/*.service");
-
 foreach ($serviceFiles as $file) {
     $filename = basename($file);
     $targetPath = "$targetSystemdDir/$filename";
@@ -92,5 +106,4 @@ $envPrefix = "XDG_RUNTIME_DIR=/run/user/$uid";
 shell_exec("runuser -l $vmUser -c '$envPrefix systemctl --user daemon-reexec'");
 shell_exec("runuser -l $vmUser -c '$envPrefix systemctl --user daemon-reload'");
 echo "[INIT] systemd --user daemon reloaded for $vmUser\n";
-
 ?>

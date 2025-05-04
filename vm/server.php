@@ -115,9 +115,9 @@ function installBundle($bundleName, $version) {
                 $result = shell_exec("systemctl --user restart $escapedService 2>&1; echo \$?");
                 $exitCode = trim($result);
                 if ($exitCode === "0") {
-                    echo "[VM {$env}.{$role}] ✅ Service '$service' restarted successfully.\n";
+                    echo "[VM {$env}.{$role}] Service '$service' restarted successfully.\n";
                 } else {
-                    echo "[VM {$env}.{$role}] ❌ Failed to restart service '$service'. Output:\n$result\n";
+                    echo "[VM {$env}.{$role}] Failed to restart service '$service'. Output:\n$result\n";
                 }
             }
         }
