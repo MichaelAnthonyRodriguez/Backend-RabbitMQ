@@ -56,4 +56,31 @@ if (!file_exists($authKeysFile) || strpos(file_get_contents($authKeysFile), $pub
 }
 
 echo "[INIT] VM initialization complete.\n";
+
+echo "[INIT] Syncing systemd service files...\n";
+
+$sourceSystemdDir = "/home/$vmUser/dev/systemd";  // or adjust if located elsewhere
+$targetSystemdDir = "/home/$vmUser/.config/systemd/user";
+
+// Create user systemd directory if missing
+if (!is_dir($targetSystemdDir)) {
+    mkdir($targetSystemdDir, 0755, true);
+    shell_exec("chown -R $vmUser:$vmUser $targetSystemdDir");
+}
+
+// Copy each service file
+$serviceFiles = glob("$sourceSystemdDir/*.service");
+foreach ($serviceFiles as $file) {
+    $filename = basename($file);
+    copy($file, "$targetSystemdDir/$filename");
+    shell_exec("chown $vmUser:$vmUser $targetSystemdDir/$filename");
+    echo "[INIT] Copied $filename to systemd user directory\n";
+}
+
+// Reload systemd as the VM user
+shell_exec("runuser -l $vmUser -c 'systemctl --user daemon-reexec'");
+shell_exec("runuser -l $vmUser -c 'systemctl --user daemon-reload'");
+echo "[INIT] systemd --user daemon reloaded for $vmUser\n";
+
+
 ?>
