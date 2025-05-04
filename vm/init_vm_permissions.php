@@ -60,7 +60,7 @@ echo "[INIT] VM initialization complete.\n";
 // === Sync systemd services ===
 echo "[INIT] Syncing systemd service files...\n";
 
-$sourceSystemdDir = "$vmHome/dev/systemd";
+$sourceSystemdDir = "$vmHome/Cinemaniacs/dev/systemd";  // <-- updated path
 $targetSystemdDir = "$vmHome/.config/systemd/user";
 
 if (!is_dir($targetSystemdDir)) {
@@ -77,22 +77,20 @@ foreach ($serviceFiles as $file) {
     $targetPath = "$targetSystemdDir/$filename";
 
     echo "[DEBUG] Copying $file to $targetPath\n";
-    
+
     if (!copy($file, $targetPath)) {
         echo "[ERROR] Failed to copy $filename\n";
         continue;
     }
-    
+
     shell_exec("chown $vmUser:$vmUser $targetPath");
     echo "[INIT] Copied $filename to $targetPath and set ownership\n";
 }
 
-
-// Reload user systemd session with correct environment
+// Reload user systemd session
 $uid = trim(shell_exec("id -u $vmUser"));
 $envPrefix = "XDG_RUNTIME_DIR=/run/user/$uid";
 shell_exec("runuser -l $vmUser -c '$envPrefix systemctl --user daemon-reexec'");
 shell_exec("runuser -l $vmUser -c '$envPrefix systemctl --user daemon-reload'");
 echo "[INIT] systemd --user daemon reloaded for $vmUser\n";
-
 ?>
