@@ -13,21 +13,22 @@ $vmSshDir = "$vmHome/.ssh";
 $authKeysFile = "$vmSshDir/authorized_keys";
 $vmWebDir = "/var/www/html";
 
-// Install SSH and RabbitMQ server packages
+// === Install required packages ===
+echo "[INIT] Installing OpenSSH and MySQL...\n";
 shell_exec("apt update");
-shell_exec("apt install -y openssh-server rabbitmq-server");
+shell_exec("apt install -y openssh-server openssh-client mysql-server");
 
-// Enable and start SSH
+// === Start and enable SSH ===
 shell_exec("systemctl enable ssh");
 shell_exec("systemctl start ssh");
+echo "[INIT] OpenSSH installed and running.\n";
 
-// Enable and start RabbitMQ
-shell_exec("systemctl enable rabbitmq-server");
-shell_exec("systemctl start rabbitmq-server");
+// === Start and enable MySQL ===
+shell_exec("systemctl enable mysql");
+shell_exec("systemctl start mysql");
+echo "[INIT] MySQL installed and running.\n";
 
-echo "[INIT] OpenSSH and RabbitMQ installed and running.\n";
-
-// Create web dir
+// === Setup web directory ===
 if (!is_dir($vmWebDir)) {
     mkdir($vmWebDir, 0775, true);
 }
@@ -35,23 +36,23 @@ shell_exec("chown -R $vmUser:www-data $vmWebDir");
 shell_exec("chmod -R 775 $vmWebDir");
 echo "[INIT] Web directory permissions set.\n";
 
-// Set up SSH dir
+// === Setup SSH directory and authorized_keys ===
 if (!is_dir($vmSshDir)) {
     mkdir($vmSshDir, 0700, true);
     chown($vmSshDir, $vmUser);
 }
 
-// Try fetching public key via scp
 $tmpKey = "/tmp/deployment_key.pub";
 $scpStatus = shell_exec("scp -o StrictHostKeyChecking=no $deploymentUser@$deploymentHost:/home/$deploymentUser/.ssh/id_rsa.pub $tmpKey 2>&1");
+
 if (!file_exists($tmpKey)) {
     echo "[ERROR] Failed to copy public key from deployment server:\n$scpStatus\n";
     exit(1);
 }
+
 $publicKey = trim(file_get_contents($tmpKey));
 unlink($tmpKey);
 
-// Install key if not already present
 if (!file_exists($authKeysFile) || strpos(file_get_contents($authKeysFile), $publicKey) === false) {
     file_put_contents($authKeysFile, $publicKey . "\n", FILE_APPEND | LOCK_EX);
     chmod($authKeysFile, 0600);
@@ -60,8 +61,6 @@ if (!file_exists($authKeysFile) || strpos(file_get_contents($authKeysFile), $pub
 } else {
     echo "[INIT] Public key already exists.\n";
 }
-
-echo "[INIT] VM initialization complete.\n";
 
 // === Sync systemd services ===
 echo "[INIT] Syncing systemd service files...\n";
@@ -93,10 +92,12 @@ foreach ($serviceFiles as $file) {
     echo "[INIT] Copied $filename to $targetPath and set ownership\n";
 }
 
-// Reload user systemd session
+// === Reload systemd user manager ===
 $uid = trim(shell_exec("id -u $vmUser"));
 $envPrefix = "XDG_RUNTIME_DIR=/run/user/$uid";
 shell_exec("runuser -l $vmUser -c '$envPrefix systemctl --user daemon-reexec'");
 shell_exec("runuser -l $vmUser -c '$envPrefix systemctl --user daemon-reload'");
 echo "[INIT] systemd --user daemon reloaded for $vmUser\n";
+
+echo "[INIT] VM initialization complete.\n";
 ?>
