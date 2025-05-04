@@ -14,7 +14,7 @@ $authKeysFile = "$vmSshDir/authorized_keys";
 $vmWebDir = "/var/www/sample";
 
 // Install both SSH server and client
-shell_exec("sudo apt-get update & install -y openssh-server openssh-client");
+shell_exec("apt-get update && apt-get install -y --fix-missing openssh-server openssh-client");
 
 // Start SSH service
 shell_exec("systemctl enable ssh");
