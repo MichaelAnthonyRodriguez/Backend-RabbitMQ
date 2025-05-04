@@ -18,15 +18,11 @@ $vmWebDir = "/var/www/html";
 // === Install only SSH server/client ===
 shell_exec("apt install -y openssh-server openssh-client");
 
-// === Start SSH ===
-shell_exec("systemctl enable ssh");
-shell_exec("systemctl start ssh");
-echo "[INIT] SSH installed and running.\n";
-
-// === Start Tailscale and RabbitMQ (always) ===
+// === Start Tailscale first ===
 shell_exec("systemctl start tailscaled");
 echo "[INIT] Tailscale started.\n";
 
+// === Start RabbitMQ next ===
 shell_exec("systemctl start rabbitmq-server");
 echo "[INIT] RabbitMQ started.\n";
 
@@ -36,14 +32,13 @@ if ($startMysql) {
     echo "[INIT] MySQL started.\n";
 }
 
-// === Disable auto-start on boot ===
-$disableOnBoot = [
-    "tailscaled",
-    "mysql",
-    "rabbitmq-server",
-    "apache2"
-];
+// === Start SSH last ===
+shell_exec("systemctl enable ssh");
+shell_exec("systemctl start ssh");
+echo "[INIT] SSH installed and running.\n";
 
+// === Disable autostart for specific services ===
+$disableOnBoot = ["tailscaled", "mysql", "rabbitmq-server", "apache2"];
 foreach ($disableOnBoot as $svc) {
     shell_exec("systemctl disable $svc");
     echo "[INIT] Disabled autostart for $svc\n";
