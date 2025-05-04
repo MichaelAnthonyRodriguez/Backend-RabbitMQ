@@ -1,9 +1,11 @@
 #!/usr/bin/php
 <?php
 if (posix_geteuid() !== 0) {
-    echo "This script must be run with sudo: sudo php init_vm_permissions.php\n";
+    echo "This script must be run with sudo: sudo php init_vm_permissions.php [sql]\n";
     exit(1);
 }
+
+$startMysql = ($argv[1] ?? '') === 'sql';
 
 $deploymentUser = 'michael-anthony-rodriguez';
 $deploymentHost = '100.105.162.20';
@@ -13,22 +15,26 @@ $vmSshDir = "$vmHome/.ssh";
 $authKeysFile = "$vmSshDir/authorized_keys";
 $vmWebDir = "/var/www/html";
 
-// === Install required packages ===
-echo "[INIT] Installing OpenSSH and MySQL...\n";
-shell_exec("apt update");
-shell_exec("apt install -y openssh-server openssh-client mysql-server");
+// Install SSH server/client
+shell_exec("apt install -y openssh-server openssh-client");
 
-// === Start and enable SSH ===
+// Start SSH
 shell_exec("systemctl enable ssh");
 shell_exec("systemctl start ssh");
-echo "[INIT] OpenSSH installed and running.\n";
+echo "[INIT] SSH installed and running.\n";
 
-// === Start and enable MySQL ===
-shell_exec("systemctl enable mysql");
-shell_exec("systemctl start mysql");
-echo "[INIT] MySQL installed and running.\n";
+// Optionally start MySQL and RabbitMQ
+if ($startMysql) {
+    shell_exec("systemctl enable mysql");
+    shell_exec("systemctl start mysql");
+    echo "[INIT] MySQL started.\n";
+}
 
-// === Setup web directory ===
+shell_exec("systemctl enable rabbitmq-server");
+shell_exec("systemctl start rabbitmq-server");
+echo "[INIT] RabbitMQ started.\n";
+
+// Create web dir if needed
 if (!is_dir($vmWebDir)) {
     mkdir($vmWebDir, 0775, true);
 }
@@ -36,7 +42,7 @@ shell_exec("chown -R $vmUser:www-data $vmWebDir");
 shell_exec("chmod -R 775 $vmWebDir");
 echo "[INIT] Web directory permissions set.\n";
 
-// === Setup SSH directory and authorized_keys ===
+// Set up .ssh
 if (!is_dir($vmSshDir)) {
     mkdir($vmSshDir, 0700, true);
     chown($vmSshDir, $vmUser);
@@ -44,12 +50,10 @@ if (!is_dir($vmSshDir)) {
 
 $tmpKey = "/tmp/deployment_key.pub";
 $scpStatus = shell_exec("scp -o StrictHostKeyChecking=no $deploymentUser@$deploymentHost:/home/$deploymentUser/.ssh/id_rsa.pub $tmpKey 2>&1");
-
 if (!file_exists($tmpKey)) {
     echo "[ERROR] Failed to copy public key from deployment server:\n$scpStatus\n";
     exit(1);
 }
-
 $publicKey = trim(file_get_contents($tmpKey));
 unlink($tmpKey);
 
@@ -62,7 +66,7 @@ if (!file_exists($authKeysFile) || strpos(file_get_contents($authKeysFile), $pub
     echo "[INIT] Public key already exists.\n";
 }
 
-// === Sync systemd services ===
+// === Sync systemd user services ===
 echo "[INIT] Syncing systemd service files...\n";
 
 $sourceSystemdDir = "$vmHome/Cinemaniacs/dev/systemd";
@@ -75,29 +79,18 @@ if (!is_dir($targetSystemdDir)) {
 
 $serviceFiles = glob("$sourceSystemdDir/*.service");
 
-echo "[INIT] Detected VM user: $vmUser\n";
-
 foreach ($serviceFiles as $file) {
     $filename = basename($file);
     $targetPath = "$targetSystemdDir/$filename";
-
-    echo "[DEBUG] Copying $file to $targetPath\n";
-
-    if (!copy($file, $targetPath)) {
-        echo "[ERROR] Failed to copy $filename\n";
-        continue;
-    }
-
+    copy($file, $targetPath);
     shell_exec("chown $vmUser:$vmUser $targetPath");
-    echo "[INIT] Copied $filename to $targetPath and set ownership\n";
+    echo "[INIT] Copied $filename to $targetPath\n";
 }
 
-// === Reload systemd user manager ===
 $uid = trim(shell_exec("id -u $vmUser"));
 $envPrefix = "XDG_RUNTIME_DIR=/run/user/$uid";
 shell_exec("runuser -l $vmUser -c '$envPrefix systemctl --user daemon-reexec'");
 shell_exec("runuser -l $vmUser -c '$envPrefix systemctl --user daemon-reload'");
 echo "[INIT] systemd --user daemon reloaded for $vmUser\n";
 
-echo "[INIT] VM initialization complete.\n";
 ?>

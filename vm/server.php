@@ -23,26 +23,18 @@ function startRoleServices($role) {
     $uid = trim(shell_exec("id -u $vmUser"));
     $envPrefix = "XDG_RUNTIME_DIR=/run/user/$uid";
 
-    $common = ['ssh', 'rabbitmq-server'];
     $services = match ($role) {
-        'frontend' => [...$common, 'apache2'],
-        'backend'  => [...$common, 'backend.service'],
-        'cron'     => [...$common, 'cron-job-1.service', 'cron-job-2.service'],
-        default    => $common
+        'backend' => ['backend.service'],
+        'cron'    => ['cron-job-1.service', 'cron-job-2.service'],
+        default   => []
     };
 
     foreach ($services as $svc) {
         echo "[VM SERVER] Starting service: $svc\n";
-
-        if ($svc === 'backend.service') {
-            $cmd = "$envPrefix systemctl --user start " . escapeshellarg($svc);
-            shell_exec("systemctl --user start backend.service");
-        } else {
-            shell_exec("sudo systemctl start " . escapeshellarg($svc));
-        }
+        $cmd = "$envPrefix systemctl --user start " . escapeshellarg($svc);
+        shell_exec("runuser -l $vmUser -c '$cmd'");
     }
 }
-
 
 
 startRoleServices($role);
