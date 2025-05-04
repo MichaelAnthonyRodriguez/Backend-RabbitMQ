@@ -69,12 +69,24 @@ if (!is_dir($targetSystemdDir)) {
 }
 
 $serviceFiles = glob("$sourceSystemdDir/*.service");
+
+echo "[INIT] Detected VM user: $vmUser\n";
+
 foreach ($serviceFiles as $file) {
     $filename = basename($file);
-    copy($file, "$targetSystemdDir/$filename");
-    shell_exec("chown $vmUser:$vmUser $targetSystemdDir/$filename");
-    echo "[INIT] Copied $filename to systemd user directory\n";
+    $targetPath = "$targetSystemdDir/$filename";
+
+    echo "[DEBUG] Copying $file to $targetPath\n";
+    
+    if (!copy($file, $targetPath)) {
+        echo "[ERROR] Failed to copy $filename\n";
+        continue;
+    }
+    
+    shell_exec("chown $vmUser:$vmUser $targetPath");
+    echo "[INIT] Copied $filename to $targetPath and set ownership\n";
 }
+
 
 // Reload user systemd session with correct environment
 $uid = trim(shell_exec("id -u $vmUser"));
