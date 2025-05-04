@@ -11,7 +11,7 @@ $vmUser = getenv('SUDO_USER') ?: getenv('USER');
 $vmHome = "/home/$vmUser";
 $vmSshDir = "$vmHome/.ssh";
 $authKeysFile = "$vmSshDir/authorized_keys";
-$vmWebDir = "/var/www/sample";
+$vmWebDir = "/var/www/html";
 
 // Install both SSH server and client
 shell_exec("sudo apt install ssh");
