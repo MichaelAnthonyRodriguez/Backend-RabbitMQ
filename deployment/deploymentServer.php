@@ -188,6 +188,24 @@ function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
     }
 }
 
+//update bundle status pass or fail
+function markLatestBundleStatus($name, $status) {
+    global $mydb;
+
+    echo "[DEPLOYMENT] Marking latest '$name' bundle as '$status'...\n";
+
+    $stmt = $mydb->prepare("UPDATE bundles SET status = ? WHERE name = ? ORDER BY version DESC LIMIT 1");
+    $stmt->bind_param("ss", $status, $name);
+    $stmt->execute();
+
+    if ($stmt->affected_rows > 0) {
+        echo "[DEPLOYMENT] Bundle '$name' marked as '$status'.\n";
+        return ["status" => "ok", "message" => "Bundle marked as $status"];
+    } else {
+        echo "[DEPLOYMENT] Failed to mark bundle or no bundle found.\n";
+        return ["status" => "error", "message" => "No matching bundle found"];
+    }
+}
 
 
 // === Request processor ===
@@ -215,6 +233,9 @@ function requestProcessor($request) {
         case 'deploy_bundle_to_vm':
             return deployBundleToVm($request['env'], $request['role'], $request['bundleName'], $request['status']);
 
+        case 'mark_bundle_status':
+            return markLatestBundleStatus($request['name'], $request['status']);
+            
         default:
             return ["status" => "error", "message" => "Unknown action"];
     }

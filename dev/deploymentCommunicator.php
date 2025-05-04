@@ -191,6 +191,24 @@ function triggerInstallOnVm($env, $role, $bundleName, $status = 'new') {
     return $response;
 }
 
+//update bundle status pass or fail
+function markBundleStatus($bundleName, $newStatus) {
+    if (!in_array($newStatus, ['passed', 'failed'])) {
+        echo "[ERROR] Status must be either 'passed' or 'failed'\n";
+        exit(1);
+    }
+
+    $client = new rabbitMQClient("deploymentRabbitMQ.ini", "deploymentServer");
+    $client->publish([
+        'action' => 'mark_bundle_status',
+        'name' => $bundleName,
+        'status' => $newStatus
+    ]);
+
+    echo "[CLI] Bundle status update request published for '$bundleName' -> '$newStatus'\n";
+}
+
+
 // === CLI Entry Point ===
 if (php_sapi_name() === 'cli') {
     $cmd = $argv[1] ?? null;
@@ -260,7 +278,18 @@ if (php_sapi_name() === 'cli') {
                 echo "Usage: php deploymentCommunicator.php create_bundle <bundleName>\n";
                 exit(1);
             }
-
+            
+            case "mark_bundle":
+                if (isset($argv[2], $argv[3])) {
+                    $bundleName = $argv[2];
+                    $newStatus = strtolower($argv[3]);
+                    markBundleStatus($bundleName, $newStatus);
+                    exit(0);
+                } else {
+                    echo "Usage: php deploymentCommunicator.php mark_bundle <bundleName> <passed|failed>\n";
+                    exit(1);
+                }
+            
         default:
             echo "Unknown command.\n";
             echo "Usage:\n";
