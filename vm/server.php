@@ -69,6 +69,7 @@ function installBundle($bundleName, $version) {
     $localTmp = "/tmp/$filename";
     $extractDir = "/tmp/{$bundleName}_install";
 
+    // Use bundle file already in /tmp (pushed by deployment server). If not present, attempt to fetch as fallback.
     if (!file_exists($localTmp)) {
         $scpCmd = "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null michael-anthony-rodriguez@100.105.162.20:$remotePath $localTmp 2>&1";
         $output = shell_exec($scpCmd);
@@ -79,14 +80,15 @@ function installBundle($bundleName, $version) {
         echo "[VM {$env}.{$role}] Fetched bundle from deployment server as fallback.\n";
     }
 
+    // Clean previous extraction directory if any
     shell_exec("rm -rf " . escapeshellarg($extractDir));
     mkdir($extractDir, 0777, true);
     shell_exec("tar -xzf " . escapeshellarg($localTmp) . " -C " . escapeshellarg($extractDir));
 
+    // Parse bundle config and deploy files
     $iniPath = "$extractDir/bundle.ini";
     $config = parse_ini_file($iniPath, true);
     $fileCount = 0;
-
     if (isset($config['files'])) {
         foreach ($config['files'] as $fname => $targetDir) {
             $sourceFile = "$extractDir/" . basename($fname);
@@ -108,18 +110,12 @@ function installBundle($bundleName, $version) {
         if (!empty($services)) {
             echo "[VM {$env}.{$role}] Restarting services: " . implode(', ', $services) . "\n";
             foreach ($services as $service) {
-                $escapedService = escapeshellarg($service);
-                $result = shell_exec("systemctl --user restart $escapedService 2>&1; echo \$?");
-                $exitCode = trim($result);
-                if ($exitCode === "0") {
-                    echo "[VM {$env}.{$role}] Service '$service' restarted successfully.\n";
-                } else {
-                    echo "[VM {$env}.{$role}] Failed to restart service '$service'. Output:\n$result\n";
-                }
+                shell_exec("systemctl --user restart " . escapeshellarg($service));
             }
         }
-    }
+    }    
 
+    // Append to crontab if [cronjobs] exists
     if (isset($config['cronjobs'])) {
         $cronEntries = implode("\n", $config['cronjobs']);
         $cronFile = "/tmp/bundle_cron_" . uniqid() . ".txt";
@@ -129,12 +125,13 @@ function installBundle($bundleName, $version) {
         echo "[VM {$env}.{$role}] Cronjobs installed.\n";
     }
 
+
+    // Clean up bundle files
     unlink($localTmp);
     shell_exec("rm -rf " . escapeshellarg($extractDir));
     echo "[VM {$env}.{$role}] Bundle installation completed.\n";
     return ["status" => "ok", "message" => "Bundle installed"];
 }
-
 
 // === Install SSH key function ===
 function installSshKey($publicKey) {
