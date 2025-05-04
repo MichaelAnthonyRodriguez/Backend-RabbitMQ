@@ -14,7 +14,7 @@ $authKeysFile = "$vmSshDir/authorized_keys";
 $vmWebDir = "/var/www/sample";
 
 // Install both SSH server and client
-shell_exec("Aapt install -y openssh-server openssh-client");
+shell_exec("apt install -y openssh-server openssh-client");
 
 // Start SSH service
 shell_exec("systemctl enable ssh");
@@ -35,7 +35,7 @@ if (!is_dir($vmSshDir)) {
     chown($vmSshDir, $vmUser);
 }
 
-// Try fetching public key via scp (better for key transfer than ssh/echo)
+// Try fetching public key via scp
 $tmpKey = "/tmp/deployment_key.pub";
 $scpStatus = shell_exec("scp -o StrictHostKeyChecking=no $deploymentUser@$deploymentHost:/home/$deploymentUser/.ssh/id_rsa.pub $tmpKey 2>&1");
 if (!file_exists($tmpKey)) {
@@ -57,18 +57,17 @@ if (!file_exists($authKeysFile) || strpos(file_get_contents($authKeysFile), $pub
 
 echo "[INIT] VM initialization complete.\n";
 
+// === Sync systemd services ===
 echo "[INIT] Syncing systemd service files...\n";
 
-$sourceSystemdDir = "/home/$vmUser/dev/systemd";  // or adjust if located elsewhere
-$targetSystemdDir = "/home/$vmUser/.config/systemd/user";
+$sourceSystemdDir = "$vmHome/dev/systemd";
+$targetSystemdDir = "$vmHome/.config/systemd/user";
 
-// Create user systemd directory if missing
 if (!is_dir($targetSystemdDir)) {
     mkdir($targetSystemdDir, 0755, true);
     shell_exec("chown -R $vmUser:$vmUser $targetSystemdDir");
 }
 
-// Copy each service file
 $serviceFiles = glob("$sourceSystemdDir/*.service");
 foreach ($serviceFiles as $file) {
     $filename = basename($file);
@@ -77,10 +76,11 @@ foreach ($serviceFiles as $file) {
     echo "[INIT] Copied $filename to systemd user directory\n";
 }
 
-// Reload systemd as the VM user
-shell_exec("runuser -l $vmUser -c 'systemctl --user daemon-reexec'");
-shell_exec("runuser -l $vmUser -c 'systemctl --user daemon-reload'");
+// Reload user systemd session with correct environment
+$uid = trim(shell_exec("id -u $vmUser"));
+$envPrefix = "XDG_RUNTIME_DIR=/run/user/$uid";
+shell_exec("runuser -l $vmUser -c '$envPrefix systemctl --user daemon-reexec'");
+shell_exec("runuser -l $vmUser -c '$envPrefix systemctl --user daemon-reload'");
 echo "[INIT] systemd --user daemon reloaded for $vmUser\n";
-
 
 ?>
