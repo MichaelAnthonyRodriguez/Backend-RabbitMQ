@@ -1,11 +1,10 @@
 [Unit]
-Description=Backend PHP Server
+Description=Custom PHP server script
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/php /home/%u/Cinemaniacs/backend/server.php QA backend
-WorkingDirectory=/home/%u/Cinemaniacs/backend
+ExecStart=/usr/bin/php /home/%u//Cinemaniacs/serverBackend/testRabbitMQServer.php
 Restart=on-failure
 
 [Install]
