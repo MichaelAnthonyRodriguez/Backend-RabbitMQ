@@ -31,7 +31,7 @@ function startRoleServices($role) {
 
     foreach ($services as $svc) {
         echo "[VM SERVER] Starting service: $svc\n";
-        shell_exec("systemctl --user start " . escapeshellarg($svc));
+        shell_exec("systemctl --user start " . $svc);
     }
 }
 
