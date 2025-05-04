@@ -19,6 +19,10 @@ echo "[VM SERVER] Starting listener for: $section\n";
 
 // === Start role-specific services ===
 function startRoleServices($role) {
+    $vmUser = getenv('SUDO_USER') ?: getenv('USER');
+    $uid = trim(shell_exec("id -u $vmUser"));
+    $envPrefix = "XDG_RUNTIME_DIR=/run/user/$uid";
+
     $common = ['ssh', 'rabbitmq-server'];
     $services = match ($role) {
         'frontend' => [...$common, 'apache2'],
@@ -29,9 +33,11 @@ function startRoleServices($role) {
 
     foreach ($services as $svc) {
         echo "[VM SERVER] Starting service: $svc\n";
-        shell_exec("sudo systemctl start " . escapeshellarg($svc));
+        $cmd = "$envPrefix systemctl --user start " . escapeshellarg($svc);
+        shell_exec("runuser -l $vmUser -c '$cmd'");
     }
 }
+
 
 startRoleServices($role);
 
