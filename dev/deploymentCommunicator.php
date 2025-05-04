@@ -279,21 +279,24 @@ if (php_sapi_name() === 'cli') {
                 exit(1);
             }
             
-            case "mark_bundle":
-                if (isset($argv[2], $argv[3])) {
-                    $bundleName = $argv[2];
-                    $newStatus = strtolower($argv[3]);
-                    markBundleStatus($bundleName, $newStatus);
-                    exit(0);
-                } else {
-                    echo "Usage: php deploymentCommunicator.php mark_bundle <bundleName> <passed|failed>\n";
-                    exit(1);
-                }
+        case "mark_bundle":
+            if (isset($argv[2], $argv[3])) {
+                $bundleName = $argv[2];
+                $newStatus = strtolower($argv[3]);
+                markBundleStatus($bundleName, $newStatus);
+                exit(0);
+            } else {
+                echo "Usage: php deploymentCommunicator.php mark_bundle <bundleName> <passed|failed>\n";
+                exit(1);
+            }
             
         default:
             echo "Unknown command.\n";
             echo "Usage:\n";
             echo "  php deploymentCommunicator.php create_bundle <bundleName>\n";
+            echo "  php deploymentCommunicator.php install_bundle <QA|PROD> <frontend|backend|dmz> <bundleName> <new|passed>\n";
+            echo "  php deploymentCommunicator.php mark_bundle <bundleName> <passed|failed>\n";
+
             exit(1);
     }
 }
