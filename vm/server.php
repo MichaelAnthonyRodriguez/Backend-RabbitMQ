@@ -36,7 +36,7 @@ function startRoleServices($role) {
 
         if ($svc === 'backend.service') {
             $cmd = "$envPrefix systemctl --user start " . escapeshellarg($svc);
-            shell_exec("runuser -l $vmUser -c '$cmd'");
+            shell_exec("systemctl --user start backend.service");
         } else {
             shell_exec("sudo systemctl start " . escapeshellarg($svc));
         }
