@@ -1,0 +1,17 @@
+[Unit]
+Description=QA Frontend VM Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/bin/bash -c '
+  systemctl start tailscaled &&
+  systemctl start rabbitmq-server &&
+  systemctl start ssh &&
+  systemctl start apache2 &&
+  php /home/%u/Cinemaniacs/dev/server.php QA frontend
+'
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
