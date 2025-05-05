@@ -55,10 +55,11 @@ if (!copy($sourcePath, $targetPath)) {
 shell_exec("chown root:root $targetPath");
 shell_exec("chmod 644 $targetPath");
 
-// Reload systemd and enable the service
+// Reload systemd, enable and start the service
 shell_exec("systemctl daemon-reexec");
 shell_exec("systemctl daemon-reload");
 shell_exec("systemctl enable $serviceName");
+shell_exec("systemctl start $serviceName");
 
-echo "[INIT] $serviceName installed and enabled to run at startup.\n";
+echo "[INIT] $serviceName installed, enabled, and started.\n";
 ?>
