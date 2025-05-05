@@ -1,16 +1,11 @@
 [Unit]
-Description=PROD DMZ VM Service
+Description=PROD DMZ VM startup
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=/bin/bash -c '
-  systemctl start tailscaled &&
-  systemctl start rabbitmq-server &&
-  systemctl start ssh &&
-  php /home/%u/Cinemaniacs/dev/server.php PROD dmz
-'
-Restart=on-failure
+ExecStart=/usr/bin/php /home/%u/Cinemaniacs/backend/server.php PROD dmz
+Restart=always
 
 [Install]
 WantedBy=default.target
