@@ -89,7 +89,7 @@ function registerVmIp($env, $role, $ip, $sshUser) {
 // === Send SSH key to VM ===
 function sendSshKeyToVm($env, $role) {
     // === Manually configurable variables ===
-    $deployUser = "michael-anthony-rodriguez";
+    $deployUser = "og62";
     $publicKeyPath = "/home/$deployUser/.ssh/id_rsa.pub";
     // ========================================
 
@@ -121,7 +121,7 @@ function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
     global $mydb;
 
     // === Configurable deployment user and path ===
-    $deployUser = "michael-anthony-rodriguez";
+    $deployUser = "og62";
     $deployHome = "/home/$deployUser";
     $bundleDir = "$deployHome/bundles";
     // =============================================

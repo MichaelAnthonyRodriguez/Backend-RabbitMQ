@@ -73,7 +73,7 @@ function installBundle($bundleName, $version) {
     $extractDir = "/tmp/{$bundleName}_install";
 
     if (!file_exists($localTmp)) {
-        $scpCmd = "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null michael-anthony-rodriguez@100.105.162.20:$remotePath $localTmp 2>&1";
+        $scpCmd = "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null og62@100.98.103.91:$remotePath $localTmp 2>&1";
         $output = shell_exec($scpCmd);
         if (!file_exists($localTmp)) {
             echo "[VM {$env}.{$role}] ERROR: Bundle file $localTmp not found. SCP attempt failed: $output\n";

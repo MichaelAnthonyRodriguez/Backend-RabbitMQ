@@ -129,8 +129,8 @@ function createBundleTarball($bundleName, $version) {
 // === SCP the bundle tarball to deployment server ===
 function sendBundleTarball($bundlePath, $bundleFilename) {
     // === Manually configurable variables ===
-    $deployUser = "michael-anthony-rodriguez";
-    $deployHostIp = "100.105.162.20";
+    $deployUser = "og62";
+    $deployHostIp = "100.98.103.91";
     // ========================================
 
     $deployHost = "$deployUser@$deployHostIp";
