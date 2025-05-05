@@ -11,8 +11,8 @@ array_shift($args);
 $startMysql = in_array('sql', $args);
 $startApache = in_array('web', $args);
 
-$deploymentUser = 'michael-anthony-rodriguez';
-$deploymentHost = '100.105.162.20';
+$deploymentUser = 'og62';
+$deploymentHost = '100.98.103.91';
 $vmUser = getenv('SUDO_USER') ?: getenv('USER');
 $vmHome = "/home/$vmUser";
 $vmSshDir = "$vmHome/.ssh";
