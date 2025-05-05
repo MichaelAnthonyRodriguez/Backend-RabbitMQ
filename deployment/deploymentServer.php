@@ -88,10 +88,15 @@ function registerVmIp($env, $role, $ip, $sshUser) {
 
 // === Send SSH key to VM ===
 function sendSshKeyToVm($env, $role) {
+    // === Manually configurable variables ===
+    $deployUser = "michael-anthony-rodriguez";
+    $publicKeyPath = "/home/$deployUser/.ssh/id_rsa.pub";
+    // ========================================
+
     echo "[DEPLOYMENT] Preparing to send SSH key to $env.$role\n";
-    $publicKey = file_get_contents('/home/michael-anthony-rodriguez/.ssh/id_rsa.pub');
+    $publicKey = file_get_contents($publicKeyPath);
     if ($publicKey === false) {
-        echo "[ERROR] Public key file not found or unreadable for $env.$role\n";
+        echo "[ERROR] Public key file not found or unreadable at $publicKeyPath for $env.$role\n";
         return ["status" => "error", "message" => "SSH public key missing"];
     }
 
@@ -110,9 +115,16 @@ function sendSshKeyToVm($env, $role) {
     return ["status" => "ok", "message" => "SSH key sent"];
 }
 
+
 // === Deploy bundle to VM ===
 function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
     global $mydb;
+
+    // === Configurable deployment user and path ===
+    $deployUser = "michael-anthony-rodriguez";
+    $deployHome = "/home/$deployUser";
+    $bundleDir = "$deployHome/bundles";
+    // =============================================
 
     echo "[DEPLOYMENT] Looking for latest '$status' bundle of '$bundleName'...\n";
 
@@ -129,7 +141,7 @@ function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
 
     $version = (int)$bundle['version'];
     $filename = "{$bundleName}_v{$version}.tgz";
-    $localPath = "/home/michael-anthony-rodriguez/bundles/$filename";
+    $localPath = "$bundleDir/$filename";
 
     if (!file_exists($localPath)) {
         echo "[DEPLOYMENT] Bundle file not found: $localPath\n";
@@ -178,8 +190,7 @@ function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
     ];
 
     try {
-        // Add timeout of 10 seconds (edit rabbitMQClient if needed)
-        $response = $client->publish($request, 10);
+        $response = $client->publish($request, 10); // 10-second timeout
         echo "[DEPLOYMENT] Install triggered successfully.\n";
         return $response;
     } catch (Exception $e) {
@@ -187,6 +198,7 @@ function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
         return ["status" => "error", "message" => "VM did not respond to install request"];
     }
 }
+
 
 //update bundle status pass or fail
 function markLatestBundleStatus($name, $status) {

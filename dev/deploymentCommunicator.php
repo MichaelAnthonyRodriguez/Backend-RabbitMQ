@@ -128,10 +128,15 @@ function createBundleTarball($bundleName, $version) {
 
 // === SCP the bundle tarball to deployment server ===
 function sendBundleTarball($bundlePath, $bundleFilename) {
-    $deployHost = "michael-anthony-rodriguez@100.105.162.20";
-    $deployDest = "/home/michael-anthony-rodriguez/bundles/$bundleFilename";
+    // === Manually configurable variables ===
+    $deployUser = "michael-anthony-rodriguez";
+    $deployHostIp = "100.105.162.20";
+    // ========================================
 
-    echo "[COMMUNICATOR] Sending tarball to deployment server...\n";
+    $deployHost = "$deployUser@$deployHostIp";
+    $deployDest = "/home/$deployUser/bundles/$bundleFilename";
+
+    echo "[COMMUNICATOR] Sending tarball to deployment server at $deployHost...\n";
     $scpCommand = "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $bundlePath $deployHost:$deployDest 2>&1";
     $scpResult = shell_exec($scpCommand);
 
@@ -145,6 +150,7 @@ function sendBundleTarball($bundlePath, $bundleFilename) {
         return true;
     }
 }
+
 
 // === Publish bundle metadata to deployment server ===
 function registerBundleMetadata($bundleName, $version, $size) {
