@@ -1,13 +1,22 @@
 #!/usr/bin/php
 <?php
 if (posix_geteuid() !== 0) {
-    echo "This script must be run with sudo: sudo php init_vm_permissions.php [sql] [web]\n";
+    echo "This script must be run with sudo: sudo php init_vm_permissions.php <ENV> <ROLE> [sql] [web]\n";
     exit(1);
 }
 
 // === CLI flags ===
 $args = $argv;
 array_shift($args);
+$env = strtoupper($args[0] ?? '');
+$role = strtolower($args[1] ?? '');
+
+if (!in_array($env, ['QA', 'PROD', 'DEV', 'DEPLOYMENT']) || 
+    !in_array($role, ['frontend', 'backend', 'dmz']) && $env !== 'DEV' && $env !== 'DEPLOYMENT') {
+    echo "Usage: sudo php init_vm_permissions.php <QA|PROD|DEV|DEPLOYMENT> <frontend|backend|dmz> [sql] [web]\n";
+    exit(1);
+}
+
 $startMysql = in_array('sql', $args);
 $startApache = in_array('web', $args);
 
@@ -19,49 +28,43 @@ $vmSshDir = "$vmHome/.ssh";
 $authKeysFile = "$vmSshDir/authorized_keys";
 $vmWebDir = "/var/www/html";
 
-// === Install only SSH server/client ===
+// === Install SSH ===
 shell_exec("apt install -y openssh-server openssh-client");
 
-// === Start Tailscale and RabbitMQ first ===
+// === Start Tailscale and RabbitMQ ===
 shell_exec("systemctl start tailscaled");
-echo "[INIT] Tailscale started.\n";
-
 shell_exec("systemctl start rabbitmq-server");
-echo "[INIT] RabbitMQ started.\n";
+echo "[INIT] Tailscale and RabbitMQ started.\n";
 
-// === Conditionally start MySQL ===
+// === Conditional Starts ===
 if ($startMysql) {
     shell_exec("systemctl start mysql");
     echo "[INIT] MySQL started.\n";
 }
 
-// === Conditionally start Apache2 ===
 if ($startApache) {
     shell_exec("systemctl start apache2");
     echo "[INIT] Apache2 started.\n";
 }
 
-// === Start SSH ===
 shell_exec("systemctl enable ssh");
 shell_exec("systemctl start ssh");
-echo "[INIT] SSH installed and running.\n";
+echo "[INIT] SSH started.\n";
 
-// === Disable autostart for non-SSH services ===
-$disableOnBoot = ["tailscaled", "mysql", "rabbitmq-server", "apache2"];
-foreach ($disableOnBoot as $svc) {
+// === Disable auto-start ===
+foreach (['tailscaled', 'mysql', 'rabbitmq-server', 'apache2'] as $svc) {
     shell_exec("systemctl disable $svc");
     echo "[INIT] Disabled autostart for $svc\n";
 }
 
-// === Web directory setup ===
+// === Web dir setup ===
 if (!is_dir($vmWebDir)) {
     mkdir($vmWebDir, 0775, true);
 }
 shell_exec("chown -R $vmUser:www-data $vmWebDir");
 shell_exec("chmod -R 775 $vmWebDir");
-echo "[INIT] Web directory permissions set.\n";
 
-// === SSH Key Installation ===
+// === SSH Key Setup ===
 if (!is_dir($vmSshDir)) {
     mkdir($vmSshDir, 0700, true);
     chown($vmSshDir, $vmUser);
@@ -70,7 +73,7 @@ if (!is_dir($vmSshDir)) {
 $tmpKey = "/tmp/deployment_key.pub";
 $scpStatus = shell_exec("scp -o StrictHostKeyChecking=no $deploymentUser@$deploymentHost:/home/$deploymentUser/.ssh/id_rsa.pub $tmpKey 2>&1");
 if (!file_exists($tmpKey)) {
-    echo "[ERROR] Failed to copy public key from deployment server:\n$scpStatus\n";
+    echo "[ERROR] Failed to fetch SSH key:\n$scpStatus\n";
     exit(1);
 }
 $publicKey = trim(file_get_contents($tmpKey));
@@ -80,35 +83,28 @@ if (!file_exists($authKeysFile) || strpos(file_get_contents($authKeysFile), $pub
     file_put_contents($authKeysFile, $publicKey . "\n", FILE_APPEND | LOCK_EX);
     chmod($authKeysFile, 0600);
     chown($authKeysFile, $vmUser);
-    echo "[INIT] Deployment public key installed.\n";
+    echo "[INIT] SSH key installed.\n";
 } else {
-    echo "[INIT] Public key already exists.\n";
+    echo "[INIT] SSH key already present.\n";
 }
 
-// === Sync systemd service files ===
-echo "[INIT] Syncing systemd service files...\n";
+// === Register systemd service ===
+$serviceName = strtolower("{$env}-{$role}.service");
+$sourceFile = "$vmHome/Cinemaniacs/dev/systemd/$serviceName";
+$targetFile = "/etc/systemd/system/$serviceName";
 
-$sourceSystemdDir = "$vmHome/Cinemaniacs/dev/systemd";
-$targetSystemdDir = "$vmHome/.config/systemd/user";
+if (file_exists($sourceFile)) {
+    copy($sourceFile, $targetFile);
+    shell_exec("chmod 644 $targetFile");
+    echo "[INIT] Installed system service $serviceName\n";
 
-if (!is_dir($targetSystemdDir)) {
-    mkdir($targetSystemdDir, 0755, true);
-    shell_exec("chown -R $vmUser:$vmUser $targetSystemdDir");
+    shell_exec("systemctl daemon-reexec");
+    shell_exec("systemctl daemon-reload");
+    shell_exec("systemctl enable $serviceName");
+    shell_exec("systemctl start $serviceName");
+    echo "[INIT] Enabled and started $serviceName\n";
+} else {
+    echo "[WARNING] Service file not found: $sourceFile\n";
 }
-
-$serviceFiles = glob("$sourceSystemdDir/*.service");
-foreach ($serviceFiles as $file) {
-    $filename = basename($file);
-    $targetPath = "$targetSystemdDir/$filename";
-    copy($file, $targetPath);
-    shell_exec("chown $vmUser:$vmUser $targetPath");
-    echo "[INIT] Copied $filename to $targetPath\n";
-}
-
-$uid = trim(shell_exec("id -u $vmUser"));
-$envPrefix = "XDG_RUNTIME_DIR=/run/user/$uid";
-shell_exec("runuser -l $vmUser -c '$envPrefix systemctl --user daemon-reexec'");
-shell_exec("runuser -l $vmUser -c '$envPrefix systemctl --user daemon-reload'");
-echo "[INIT] systemd --user daemon reloaded for $vmUser\n";
 
 ?>
