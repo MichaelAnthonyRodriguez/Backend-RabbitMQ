@@ -66,8 +66,16 @@ foreach ($serviceFiles as $serviceName) {
     shell_exec("systemctl daemon-reexec");
     shell_exec("systemctl daemon-reload");
     shell_exec("systemctl enable $serviceName");
-    shell_exec("systemctl start $serviceName");
 
-    echo "[INIT] $serviceName installed, enabled, and started.\n";
+    if (str_contains($serviceName, '-vm.service')) {
+        shell_exec("systemctl start $serviceName");
+        echo "[INIT] $serviceName installed, enabled, and started (root).\n";
+    } else {
+        shell_exec("runuser -l $vmUser -c 'systemctl --user daemon-reexec'");
+        shell_exec("runuser -l $vmUser -c 'systemctl --user daemon-reload'");
+        shell_exec("runuser -l $vmUser -c 'systemctl --user enable $serviceName'");
+        shell_exec("runuser -l $vmUser -c 'systemctl --user start $serviceName'");
+        echo "[INIT] $serviceName installed, enabled, and started (as $vmUser).\n";
+    }
 }
 ?>
