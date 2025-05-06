@@ -8,6 +8,7 @@ Type=simple
 WorkingDirectory=%h/Cinemaniacs/vm
 ExecStart=/usr/bin/php /home/%u/Cinemaniacs/vm/server.php PROD backend
 Restart=always
+RestartSec=15
 
 [Install]
 WantedBy=default.target

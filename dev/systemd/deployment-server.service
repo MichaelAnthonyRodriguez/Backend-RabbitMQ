@@ -7,6 +7,7 @@ Type=simple
 WorkingDirectory=%h/Cinemaniacs/deployment
 ExecStart=/usr/bin/php %h/Cinemaniacs/deployment/deploymentServer.php
 Restart=always
+RestartSec=15
 
 [Install]
 WantedBy=default.target
