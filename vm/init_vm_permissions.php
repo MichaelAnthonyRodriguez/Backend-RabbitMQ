@@ -55,10 +55,12 @@ foreach ($allPossibleServices as $oldService) {
         shell_exec("systemctl stop $oldService");
         echo " - Disabled and stopped (root): $oldService\n";
     }
-    if (file_exists("$userSystemdDir/$oldService")) {
+    $userServicePath = "$userSystemdDir/$oldService";
+    if (file_exists($userServicePath)) {
         shell_exec("runuser -l $vmUser -c 'systemctl --user disable $oldService'");
         shell_exec("runuser -l $vmUser -c 'systemctl --user stop $oldService'");
-        echo " - Disabled and stopped (user): $oldService\n";
+        unlink($userServicePath);
+        echo " - Disabled, stopped, and deleted (user): $oldService\n";
     }
 }
 
