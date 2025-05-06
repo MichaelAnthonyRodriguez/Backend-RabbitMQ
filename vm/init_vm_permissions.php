@@ -27,6 +27,36 @@ if (!in_array($env, $validEnvs)) {
 $vmUser = getenv('SUDO_USER') ?: getenv('USER');
 $vmHome = "/home/$vmUser";
 
+// Known list of all possible service files to clear first
+$allPossibleServices = [
+    'dev-vm.service',
+    'deployment-vm.service',
+    'deployment-server.service',
+    'qa-frontend-vm.service', 'qa-frontend.service',
+    'qa-backend-vm.service', 'qa-backend.service',
+    'qa-dmz-vm.service', 'qa-dmz.service',
+    'prod-frontend-vm.service', 'prod-frontend.service',
+    'prod-backend-vm.service', 'prod-backend.service',
+    'prod-dmz-vm.service', 'prod-dmz.service',
+    'backend-server.service'
+];
+
+// === Step 1: Disable and stop old services ===
+echo "[INIT] Removing any existing enabled services...\n";
+
+foreach ($allPossibleServices as $oldService) {
+    if (file_exists("/etc/systemd/system/$oldService")) {
+        shell_exec("systemctl disable $oldService");
+        shell_exec("systemctl stop $oldService");
+        echo " - Disabled and stopped (root): $oldService\n";
+    }
+
+    // Also disable for user scope if applicable
+    shell_exec("runuser -l $vmUser -c 'systemctl --user disable $oldService'");
+    shell_exec("runuser -l $vmUser -c 'systemctl --user stop $oldService'");
+}
+
+// === Step 2: Reinstall the intended services ===
 $serviceFiles = [];
 
 if ($env === 'deployment') {
