@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/php /home/%u/Cinemaniacs/backend/server.php PROD frontend
+ExecStart=/usr/bin/php /home/%u/Cinemaniacs/vm/server.php PROD frontend
 Restart=always
 
 [Install]
