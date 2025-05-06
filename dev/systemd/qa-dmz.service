@@ -1,5 +1,5 @@
 [Unit]
-Description=QA DMZ VM startup
+Description=QA DMZ VM listener
 After=network.target
 
 [Service]

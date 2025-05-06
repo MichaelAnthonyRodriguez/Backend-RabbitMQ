@@ -1,5 +1,5 @@
 [Unit]
-Description=PROD Frontend VM startup
+Description=PROD Frontend VM listener
 After=network.target
 
 [Service]

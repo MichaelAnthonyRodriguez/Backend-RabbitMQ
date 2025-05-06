@@ -24,42 +24,50 @@ if (!in_array($env, $validEnvs)) {
     exit(1);
 }
 
-$serviceName = '';
-if (in_array($env, ['dev', 'deployment'])) {
-    $serviceName = "{$env}-vm.service";
+$vmUser = getenv('SUDO_USER') ?: getenv('USER');
+$vmHome = "/home/$vmUser";
+
+$serviceFiles = [];
+
+if ($env === 'deployment') {
+    $serviceFiles = ['deployment-vm.service', 'deployment-server.service'];
+} elseif ($env === 'dev') {
+    $serviceFiles = ['dev-vm.service'];
 } else {
     if (!$role || !in_array($role, $validRoles)) {
         echo "[ERROR] For QA/PROD, provide a valid role: frontend, backend, or dmz\n";
         exit(1);
     }
-    $serviceName = "{$env}-{$role}.service";
+
+    $prefix = "{$env}-{$role}";
+    $serviceFiles = ["$prefix-vm.service", "$prefix.service"];
+
+    if ($role === 'backend') {
+        $serviceFiles[] = "backend-server.service";
+    }
 }
 
-$vmUser = getenv('SUDO_USER') ?: getenv('USER');
-$vmHome = "/home/$vmUser";
-$sourcePath = "$vmHome/Cinemaniacs/dev/systemd/$serviceName";
-$targetPath = "/etc/systemd/system/$serviceName";
+foreach ($serviceFiles as $serviceName) {
+    $sourcePath = "$vmHome/Cinemaniacs/dev/systemd/$serviceName";
+    $targetPath = "/etc/systemd/system/$serviceName";
 
-if (!file_exists($sourcePath)) {
-    echo "[ERROR] Service file not found at $sourcePath\n";
-    exit(1);
+    if (!file_exists($sourcePath)) {
+        echo "[ERROR] Service file not found at $sourcePath\n";
+        continue;
+    }
+
+    if (!copy($sourcePath, $targetPath)) {
+        echo "[ERROR] Failed to copy $serviceName to /etc/systemd/system\n";
+        continue;
+    }
+
+    shell_exec("chown root:root $targetPath");
+    shell_exec("chmod 644 $targetPath");
+    shell_exec("systemctl daemon-reexec");
+    shell_exec("systemctl daemon-reload");
+    shell_exec("systemctl enable $serviceName");
+    shell_exec("systemctl start $serviceName");
+
+    echo "[INIT] $serviceName installed, enabled, and started.\n";
 }
-
-// Copy service file to systemd system path
-if (!copy($sourcePath, $targetPath)) {
-    echo "[ERROR] Failed to copy $serviceName to /etc/systemd/system\n";
-    exit(1);
-}
-
-// Set permissions
-shell_exec("chown root:root $targetPath");
-shell_exec("chmod 644 $targetPath");
-
-// Reload systemd, enable and start the service
-shell_exec("systemctl daemon-reexec");
-shell_exec("systemctl daemon-reload");
-shell_exec("systemctl enable $serviceName");
-shell_exec("systemctl start $serviceName");
-
-echo "[INIT] $serviceName installed, enabled, and started.\n";
 ?>

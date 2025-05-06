@@ -1,5 +1,5 @@
 [Unit]
-Description=PROD DMZ VM startup
+Description=PROD DMZ VM listener
 After=network.target
 
 [Service]

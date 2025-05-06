@@ -1,5 +1,5 @@
 [Unit]
-Description=QA Frontend VM startup
+Description=QA Frontend VM listener
 After=network.target
 
 [Service]

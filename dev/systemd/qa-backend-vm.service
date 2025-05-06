@@ -1,0 +1,11 @@
+[Unit]
+Description=QA Backend VM startup
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'systemctl start tailscaled; systemctl start rabbitmq-server; systemctl start ssh; systemctl start mysql'
+RemainAfterExit=true
+
+[Install]
+WantedBy=default.target
