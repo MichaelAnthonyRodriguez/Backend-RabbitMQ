@@ -180,7 +180,7 @@ function triggerInstallOnVm($env, $role, $bundleName, $status = 'new') {
     echo "[COMMUNICATOR] Instructing deployment server to deploy bundle '$bundleName' (status: $status) to $env.$role\n";
 
     try {
-        $response = $client->send_request([
+        $response = $client->publish([
             'action' => 'deploy_bundle_to_vm',
             'env'    => $env,
             'role'   => $role,
