@@ -1,9 +1,11 @@
 [Unit]
 Description=PROD Backend VM listener
-After=network.target
+Wants=backend-server.service
+After=backend-server.service network.target
 
 [Service]
 Type=simple
+WorkingDirectory=%h/Cinemaniacs/vm
 ExecStart=/usr/bin/php /home/%u/Cinemaniacs/vm/server.php PROD backend
 Restart=always
 
