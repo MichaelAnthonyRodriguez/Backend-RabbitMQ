@@ -7,8 +7,7 @@ After=backend-server.service network.target
 Type=simple
 WorkingDirectory=%h/Cinemaniacs/vm
 ExecStart=/usr/bin/php %h/Cinemaniacs/vm/server.php QA backend
-Restart=always
-RestartSec=5
+Restart=no
 
 [Install]
 WantedBy=default.target
