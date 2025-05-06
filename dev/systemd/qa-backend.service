@@ -1,11 +1,10 @@
 [Unit]
-Description=QA Backend listener
+Description=QA Backend VM listener
 After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=%h/Cinemaniacs/vm
-ExecStart=/usr/bin/php %h/Cinemaniacs/vm/server.php QA backend
+ExecStart=/usr/bin/php /home/%u/Cinemaniacs/vm/server.php QA backend
 Restart=always
 
 [Install]
