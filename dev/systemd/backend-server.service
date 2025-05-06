@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/php /home/%u/Cinemaniacs/serverBackend/testRabbitMQServer.php
+ExecStart=/usr/bin/php %h/Cinemaniacs/serverBackend/testRabbitMQServer.php
 Restart=on-failure
 
 [Install]

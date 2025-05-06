@@ -13,10 +13,10 @@ if (count($args) < 1) {
     exit(1);
 }
 
-$env = strtolower($args[0]);
+$env  = strtolower($args[0]);
 $role = isset($args[1]) ? strtolower($args[1]) : null;
 
-$validEnvs = ['dev', 'deployment', 'qa', 'prod'];
+$validEnvs  = ['dev', 'deployment', 'qa', 'prod'];
 $validRoles = ['frontend', 'backend', 'dmz'];
 
 if (!in_array($env, $validEnvs)) {
@@ -28,10 +28,14 @@ $vmUser = getenv('SUDO_USER') ?: getenv('USER');
 $vmHome = "/home/$vmUser";
 $userSystemdDir = "$vmHome/.config/systemd/user";
 
+// Ensure the user systemd directory exists
 if (!is_dir($userSystemdDir)) {
     mkdir($userSystemdDir, 0755, true);
     shell_exec("chown -R $vmUser:$vmUser $vmHome/.config");
 }
+// Enable lingering to allow user services to run at boot
+shell_exec("loginctl enable-linger $vmUser");
+echo "[INIT] Enabled lingering for user: $vmUser\n";
 
 $allPossibleServices = [
     'dev-vm.service',
@@ -46,6 +50,7 @@ $allPossibleServices = [
     'backend-server.service'
 ];
 
+// Disable and stop any existing instances of our services (system-wide and user)
 echo "[INIT] Disabling any existing services...\n";
 foreach ($allPossibleServices as $oldService) {
     if (file_exists("/etc/systemd/system/$oldService")) {
@@ -53,7 +58,6 @@ foreach ($allPossibleServices as $oldService) {
         shell_exec("systemctl stop $oldService");
         echo " - Disabled and stopped (root): $oldService\n";
     }
-
     if (file_exists("$userSystemdDir/$oldService")) {
         shell_exec("runuser -l $vmUser -c 'systemctl --user disable $oldService'");
         shell_exec("runuser -l $vmUser -c 'systemctl --user stop $oldService'");
@@ -62,56 +66,58 @@ foreach ($allPossibleServices as $oldService) {
 }
 
 $serviceFiles = [];
-
 if ($env === 'deployment') {
+    // Deployment environment: one system unit and one user unit
     $serviceFiles = ['deployment-vm.service', 'deployment-server.service'];
 } elseif ($env === 'dev') {
+    // Dev environment: only a system-level VM service (development-specific setup)
     $serviceFiles = ['dev-vm.service'];
 } else {
+    // QA or PROD environment, requires a role
     if (!$role || !in_array($role, $validRoles)) {
         echo "[ERROR] For QA/PROD, provide a valid role: frontend, backend, or dmz\n";
         exit(1);
     }
-
     $prefix = "{$env}-{$role}";
-    $serviceFiles = ["$prefix-vm.service", "$prefix.service"];
-
     if ($role === 'backend') {
-        $serviceFiles[] = "backend-server.service";
+        // Backend roles have an extra user service; ensure the backend service starts last
+        $serviceFiles = ["{$prefix}-vm.service", "backend-server.service", "{$prefix}.service"];
+    } else {
+        $serviceFiles = ["{$prefix}-vm.service", "{$prefix}.service"];
     }
 }
 
+// Install and enable each required service
 foreach ($serviceFiles as $serviceName) {
     $sourcePath = "$vmHome/Cinemaniacs/dev/systemd/$serviceName";
-
     if (!file_exists($sourcePath)) {
         echo "[ERROR] Service file not found at $sourcePath\n";
         continue;
     }
 
-    // Decide target based on type of service
+    // Determine target installation path based on service type (system vs user)
     $isVmService = str_contains($serviceName, '-vm.service');
-    $targetPath = $isVmService
-        ? "/etc/systemd/system/$serviceName"
-        : "$userSystemdDir/$serviceName";
+    $targetPath  = $isVmService 
+                 ? "/etc/systemd/system/$serviceName"          // system-wide service
+                 : "$userSystemdDir/$serviceName";             // user-level service
 
-    // Copy service file
+    // Copy the service unit file to the appropriate location
     if (!copy($sourcePath, $targetPath)) {
         echo "[ERROR] Failed to copy $serviceName to $targetPath\n";
         continue;
     }
 
     if ($isVmService) {
+        // System-level service: set root ownership and proper permissions, then enable
         shell_exec("chown root:root $targetPath");
         shell_exec("chmod 644 $targetPath");
-        shell_exec("systemctl daemon-reexec");
-        shell_exec("systemctl daemon-reload");
+        shell_exec("systemctl daemon-reload");  // reload systemd to pick up new unit
         shell_exec("systemctl enable $serviceName");
         shell_exec("systemctl start $serviceName");
         echo "[INIT] $serviceName installed, enabled, and started (root).\n";
     } else {
+        // User-level service: set user ownership, then enable under the user's systemd
         shell_exec("chown $vmUser:$vmUser $targetPath");
-        shell_exec("runuser -l $vmUser -c 'systemctl --user daemon-reexec'");
         shell_exec("runuser -l $vmUser -c 'systemctl --user daemon-reload'");
         shell_exec("runuser -l $vmUser -c 'systemctl --user enable $serviceName'");
         shell_exec("runuser -l $vmUser -c 'systemctl --user start $serviceName'");

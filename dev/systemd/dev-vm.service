@@ -8,4 +8,4 @@ ExecStart=/bin/bash -c 'systemctl start tailscaled; systemctl start rabbitmq-ser
 RemainAfterExit=true
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target

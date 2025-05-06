@@ -1,12 +1,12 @@
 [Unit]
 Description=Deployment PHP Server
-After=network.target mysql.service rabbitmq-server.service
+After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/php /home/%u/Cinemaniacs/deployment/deploymentServer.php
+ExecStart=/usr/bin/php %h/Cinemaniacs/deployment/deploymentServer.php
 Restart=always
 RestartSec=5
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target
