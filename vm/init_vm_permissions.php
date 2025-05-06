@@ -26,8 +26,13 @@ if (!in_array($env, $validEnvs)) {
 
 $vmUser = getenv('SUDO_USER') ?: getenv('USER');
 $vmHome = "/home/$vmUser";
+$userSystemdDir = "$vmHome/.config/systemd/user";
 
-// Known list of all possible service files to clear first
+if (!is_dir($userSystemdDir)) {
+    mkdir($userSystemdDir, 0755, true);
+    shell_exec("chown -R $vmUser:$vmUser $vmHome/.config");
+}
+
 $allPossibleServices = [
     'dev-vm.service',
     'deployment-vm.service',
@@ -41,9 +46,7 @@ $allPossibleServices = [
     'backend-server.service'
 ];
 
-// === Step 1: Disable and stop old services ===
-echo "[INIT] Removing any existing enabled services...\n";
-
+echo "[INIT] Disabling any existing services...\n";
 foreach ($allPossibleServices as $oldService) {
     if (file_exists("/etc/systemd/system/$oldService")) {
         shell_exec("systemctl disable $oldService");
@@ -51,12 +54,13 @@ foreach ($allPossibleServices as $oldService) {
         echo " - Disabled and stopped (root): $oldService\n";
     }
 
-    // Also disable for user scope if applicable
-    shell_exec("runuser -l $vmUser -c 'systemctl --user disable $oldService'");
-    shell_exec("runuser -l $vmUser -c 'systemctl --user stop $oldService'");
+    if (file_exists("$userSystemdDir/$oldService")) {
+        shell_exec("runuser -l $vmUser -c 'systemctl --user disable $oldService'");
+        shell_exec("runuser -l $vmUser -c 'systemctl --user stop $oldService'");
+        echo " - Disabled and stopped (user): $oldService\n";
+    }
 }
 
-// === Step 2: Reinstall the intended services ===
 $serviceFiles = [];
 
 if ($env === 'deployment') {
@@ -79,28 +83,34 @@ if ($env === 'deployment') {
 
 foreach ($serviceFiles as $serviceName) {
     $sourcePath = "$vmHome/Cinemaniacs/dev/systemd/$serviceName";
-    $targetPath = "/etc/systemd/system/$serviceName";
 
     if (!file_exists($sourcePath)) {
         echo "[ERROR] Service file not found at $sourcePath\n";
         continue;
     }
 
+    // Decide target based on type of service
+    $isVmService = str_contains($serviceName, '-vm.service');
+    $targetPath = $isVmService
+        ? "/etc/systemd/system/$serviceName"
+        : "$userSystemdDir/$serviceName";
+
+    // Copy service file
     if (!copy($sourcePath, $targetPath)) {
-        echo "[ERROR] Failed to copy $serviceName to /etc/systemd/system\n";
+        echo "[ERROR] Failed to copy $serviceName to $targetPath\n";
         continue;
     }
 
-    shell_exec("chown root:root $targetPath");
-    shell_exec("chmod 644 $targetPath");
-    shell_exec("systemctl daemon-reexec");
-    shell_exec("systemctl daemon-reload");
-    shell_exec("systemctl enable $serviceName");
-
-    if (str_contains($serviceName, '-vm.service')) {
+    if ($isVmService) {
+        shell_exec("chown root:root $targetPath");
+        shell_exec("chmod 644 $targetPath");
+        shell_exec("systemctl daemon-reexec");
+        shell_exec("systemctl daemon-reload");
+        shell_exec("systemctl enable $serviceName");
         shell_exec("systemctl start $serviceName");
         echo "[INIT] $serviceName installed, enabled, and started (root).\n";
     } else {
+        shell_exec("chown $vmUser:$vmUser $targetPath");
         shell_exec("runuser -l $vmUser -c 'systemctl --user daemon-reexec'");
         shell_exec("runuser -l $vmUser -c 'systemctl --user daemon-reload'");
         shell_exec("runuser -l $vmUser -c 'systemctl --user enable $serviceName'");
