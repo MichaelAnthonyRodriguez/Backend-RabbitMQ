@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<?php
+require("../register.php");
+?>
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="CSS/styles.css">
+</head>
+
+<body>
+    <div class="register_form">
+        <form action="../register.php">
+            <h2 class="register">Register</h2>
+            <div>
+                <div class="input_box">
+                    <label for="fname">First Name</label>
+                    <input type="text" id="fname" placeholder="Enter first name" required />
+                </div>
+                <div class="input_box">
+                    <label for="lname">Last Name</label>
+                    <input type="text" id="lname" placeholder="Enter last name" required />
+                </div>
+                <div class="input_box">
+                    <label for="email">Username</label>
+                    <input type="text" id="username" placeholder="Enter username" required />
+                </div>
+                <div class="input_box">
+                    <div>
+                        <label for="password">Password</label>
+                    </div>
+                    <input type="password" id="password" placeholder="Enter your password" required />
+                    <div>
+                        <label for="cpassword">Confirm Password</label>
+                    </div>
+                    <input type="password" id="cpassword" placeholder="Enter your password" required />
+                </div>
+                <button type="submit">Register</button>
+                <p class="sign_up">Have an account? <a href="/index.html">Sign in</a></p>
+        </form>
+    </div>
+    <div id="textResponse">
+        awaiting response
+    </div>
+    <script>
+        SendLoginRequest("uname", "pword");
+    </script>
+</body>
+
+</html>

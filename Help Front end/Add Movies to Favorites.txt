@@ -1,0 +1,19 @@
+app.post('/profile/favorites', authMiddleware, async (req, res) => {
+  const userId = req.user.id;
+  const { movie_id } = req.body;
+
+  try {
+    // Check if movie exists
+    const movie = await db.query('SELECT * FROM movies WHERE movie_id = $1', [movie_id]);
+    if (!movie.rows[0]) return res.status(404).json({ error: 'Movie not found' });
+
+    // Add to favorites
+    await db.query(
+      'INSERT INTO user_favorites (user_id, movie_id) VALUES ($1, $2)',
+      [userId, movie_id]
+    );
+    res.json({ success: true, message: 'Movie added to favorites' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to add movie to favorites' });
+  }
+});

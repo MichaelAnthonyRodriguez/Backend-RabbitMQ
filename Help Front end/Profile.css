@@ -1,0 +1,95 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: "Cambria", Georgia, serif;
+}
+
+body {
+    background: powderblue;
+}
+
+
+ul {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+    margin-bottom: 5%;
+    overflow: hidden;
+    background-color: lightskyblue;
+}
+
+li {
+    float: left;
+}
+
+li a {
+    display: block;
+    color: white;
+    text-align: center;
+    padding: 14px 16px;
+    text-decoration: none;
+}
+
+li a:hover:not(.active) {
+    background-color: deepskyblue;
+}
+
+.active {
+    background-color: deepskyblue;
+}
+
+.logout a:hover:not(.logout) {
+    background-color: indianred;
+}
+
+
+.maintext {
+    text-align: center;
+}
+
+.profile-container {
+    max-width: 800px;
+    margin: 20px auto;
+    padding: 20px;
+    background: #1f1f1f;
+    border-radius: 10px;
+}
+
+.profile-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.profile-pic {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #e50914;
+}
+
+.stats {
+    display: flex;
+    justify-content: space-around;
+    margin: 30px 0;
+}
+
+.stat-item {
+    text-align: center;
+}
+
+.recent-activity {
+    margin-top: 30px;
+}
+
+.activity-item {
+    display: flex;
+    margin: 15px 0;
+    align-items: center;
+}
+
+.activity-item img {
+    width: 60px;
+    margin-right: 15px;
+}
