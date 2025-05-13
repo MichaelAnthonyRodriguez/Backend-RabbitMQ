@@ -152,7 +152,7 @@ function deployBundleToVm($env, $role, $bundleName, $status = 'new') {
 
     // Get VM IP and SSH user
     $ipQuery = $mydb->prepare("SELECT ip, ssh_user FROM vm_ips WHERE env = ? AND role = ?");
-    $ipQuery->bind_param("ss", $env, $role);
+    $ipQuery->bind_param("ss", $role, $env);
     $ipQuery->execute();
     $ipResult = $ipQuery->get_result();
     $ipRow = $ipResult->fetch_assoc();
